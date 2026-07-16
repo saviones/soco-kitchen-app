@@ -6,14 +6,14 @@ eating through the whole menu into a quest.
 
 ## 📱 Try it right now
 
-**Live app: https://savvi111.github.io/soco-kitchen-app/**
+**Live app: https://saviones.github.io/soco-kitchen-app/**
 
 - On your **phone**: open the link, then "Add to Home Screen" — it installs like a real app and works offline.
 - On a **desktop**: same link, it renders inside a phone frame.
 
 ## Run it locally
 
-Clone or [download ZIP](https://github.com/savvi111/soco-kitchen-app/archive/refs/heads/main.zip), then
+Clone or [download ZIP](https://github.com/saviones/soco-kitchen-app/archive/refs/heads/main.zip), then
 double-click **run.bat** (serves at http://localhost:8737 and opens your browser).
 On a desktop browser it renders inside a phone frame; on an actual phone it's full-screen
 and installable (PWA — "Add to Home Screen").
