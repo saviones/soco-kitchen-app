@@ -1,5 +1,5 @@
 /* SoCo Kitchen — offline cache */
-const V = "soco-v1";
+const V = "soco-v3";
 const CORE = [
   "./", "./index.html", "./manifest.webmanifest",
   "./css/app.css",
@@ -17,11 +17,24 @@ self.addEventListener("activate", e => {
 });
 self.addEventListener("fetch", e => {
   if (e.request.method !== "GET" || !e.request.url.startsWith(self.location.origin)) return;
-  e.respondWith(
-    caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
-      const copy = res.clone();
-      caches.open(V).then(c => c.put(e.request, copy));
-      return res;
-    }).catch(() => hit))
-  );
+  const isImage = /\.(jpg|jpeg|png|webp)$/i.test(new URL(e.request.url).pathname);
+  if (isImage){
+    // images never change — cache-first
+    e.respondWith(
+      caches.match(e.request).then(hit => hit || fetch(e.request).then(res => {
+        const copy = res.clone();
+        caches.open(V).then(c => c.put(e.request, copy));
+        return res;
+      }))
+    );
+  } else {
+    // html/css/js — network-first so app updates land immediately; cache is the offline fallback
+    e.respondWith(
+      fetch(e.request).then(res => {
+        const copy = res.clone();
+        caches.open(V).then(c => c.put(e.request, copy));
+        return res;
+      }).catch(() => caches.match(e.request))
+    );
+  }
 });
