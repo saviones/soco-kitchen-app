@@ -1,0 +1,14 @@
+{
+  "name": "Southern Comfort Kitchen",
+  "short_name": "SoCo Kitchen",
+  "description": "Order from all 4 Bay Area SoCo Kitchen locations, explore the menu, and play the SoCo Streetcar Challenge.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#160b2e",
+  "theme_color": "#160b2e",
+  "icons": [
+    { "src": "assets/brand/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "assets/brand/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

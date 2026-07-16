@@ -1,0 +1,9 @@
+# build artifacts / superseded originals — not part of the app
+assets/menu-source/contact-sheet.jpg
+assets/food/screenshot-1.png
+assets/food/screenshot-2.png
+assets/food/screenshot-3.png
+# licensed stock photo from the website — don't redistribute in a public repo
+assets/food/beignets-shutterstock.jpg
+Thumbs.db
+desktop.ini

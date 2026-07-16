@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SoCo Kitchen — Southern Comfort Kitchen</title>
+<meta name="theme-color" content="#160b2e">
+<meta name="description" content="Southern Comfort Kitchen — order from any of our 4 Bay Area locations, explore the menu, and eat your way through the SoCo Streetcar Challenge.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/brand/icon-192.png">
+<link rel="apple-touch-icon" href="assets/brand/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="phone">
+
+  <!-- Splash -->
+  <div id="splash">
+    <img src="assets/brand/logo.png" alt="Southern Comfort Kitchen">
+    <div class="st">Comfort In Every Bite</div>
+    <div class="fleur">⚜️</div>
+  </div>
+
+  <!-- Header -->
+  <header>
+    <img class="logo" src="assets/brand/logo.png" alt="SoCo Kitchen">
+    <div class="spacer"></div>
+    <button class="chip" id="locChip" title="Your home location">📍 <span id="locChipTxt">…</span></button>
+    <button class="chip gold" id="ptsChip" title="Your points">⚜️ <span id="ptsChipTxt">0</span></button>
+  </header>
+
+  <!-- Screens -->
+  <main id="main">
+    <section class="screen" id="scr-home"></section>
+    <section class="screen" id="scr-menu"></section>
+    <section class="screen" id="scr-order"></section>
+    <section class="screen" id="scr-quest"></section>
+    <section class="screen" id="scr-rewards"></section>
+  </main>
+
+  <!-- Item / generic bottom sheet -->
+  <div class="sheetwrap" id="sheetwrap">
+    <div class="scrim" onclick="App.closeSheet()"></div>
+    <div class="sheet" id="sheet"></div>
+  </div>
+
+  <!-- In-app notifications -->
+  <div id="nots"></div>
+  <canvas id="confetti"></canvas>
+
+  <!-- Tab bar -->
+  <nav id="nav">
+    <button data-tab="home"    class="on"><span class="ni">⚜️</span>Home</button>
+    <button data-tab="menu"><span class="ni">🍽️</span>Menu</button>
+    <button data-tab="order"><span class="ni">🛒</span>Order<span class="navdot" id="cartDot" style="display:none">0</span></button>
+    <button data-tab="quest"><span class="ni">🚋</span>Quest</button>
+    <button data-tab="rewards"><span class="ni">🎁</span>Rewards</button>
+  </nav>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/infographics.js"></script>
+<script src="js/game.js"></script>
+<script src="js/toast-sync.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
