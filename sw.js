@@ -1,5 +1,5 @@
 /* SoCo Kitchen — offline cache */
-const V = "soco-v3";
+const V = "soco-v4";
 const CORE = [
   "./", "./index.html", "./manifest.webmanifest",
   "./css/app.css",
@@ -28,9 +28,10 @@ self.addEventListener("fetch", e => {
       }))
     );
   } else {
-    // html/css/js — network-first so app updates land immediately; cache is the offline fallback
+    // html/css/js — network-first, always revalidated, so app updates land immediately;
+    // cache is the offline fallback
     e.respondWith(
-      fetch(e.request).then(res => {
+      fetch(e.request.url, { cache: "no-cache" }).then(res => {
         const copy = res.clone();
         caches.open(V).then(c => c.put(e.request, copy));
         return res;

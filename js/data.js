@@ -142,7 +142,7 @@ SOCO.MENU = [
   { id:"chicken-strips", cat:"classics", name:"Fried Chicken Strips w/ Cajun Fries", price:14, emoji:"🍗",
     desc:"4 marinated chicken breast strips hand-battered in seasoned white flour & fried. Side of blackened ranch.",
     spice:0, pop:7, dna:{heat:1,crunch:8,comfort:8,fresh:0,rich:6,sweet:0}, pair:"fountain" },
-  { id:"jambalaya", cat:"classics", name:"Chicken & Sausage Jambalaya", price:14, emoji:"🍚", img:"assets/food/jambalaya.jpg",
+  { id:"jambalaya", cat:"classics", name:"Chicken & Sausage Jambalaya", price:14, emoji:"🍚",
     desc:"Our famous Cajun rice dish with chunks of chicken, beef & pork andouille sausage & spices, topped with green onions.",
     spice:2, pop:9, dna:{heat:6,crunch:1,comfort:10,fresh:1,rich:8,sweet:0}, pair:"lemonade", signature:true },
   { id:"gumbo", cat:"classics", name:"Seafood Gumbo", price:15, emoji:"🥣",
@@ -151,10 +151,10 @@ SOCO.MENU = [
   { id:"blackened-fish-platter", cat:"classics", name:"Blackened Fish Platter", price:18, emoji:"🐟", img:"assets/food/blackened-fish.jpg",
     desc:"Pan-seared blackened rainbow trout with your choice of Brussels sprouts or red beans & rice with beef & pork sausage.",
     spice:2, pop:7, dna:{heat:5,crunch:3,comfort:6,fresh:6,rich:5,sweet:0}, pair:"wines" },
-  { id:"etouffee", cat:"classics", name:"Crawfish Étouffée", price:15, emoji:"🦞", img:"assets/food/etouffee.jpg",
+  { id:"etouffee", cat:"classics", name:"Crawfish Étouffée", price:15, emoji:"🦞",
     desc:"Louisiana crawfish tails smothered in a rich sauce. Topped with white rice & green onions. Served with French bread.",
     spice:2, pop:8, dna:{heat:5,crunch:0,comfort:10,fresh:1,rich:9,sweet:1}, pair:"tea" },
-  { id:"crawfish-pasta", cat:"classics", name:"Crawfish Pasta", price:17, emoji:"🍝",
+  { id:"crawfish-pasta", cat:"classics", name:"Crawfish Pasta", price:17, emoji:"🍝", img:"assets/food/crawfish-pasta.jpg",
     desc:"Pasta smothered in a spicy crawfish sauce with white wine, roma tomatoes, green onions & a dash of lemon.",
     spice:3, pop:7, dna:{heat:7,crunch:0,comfort:8,fresh:3,rich:9,sweet:0}, pair:"wines" },
   { id:"blackened-shrimp", cat:"classics", name:"Blackened Shrimp w/ Grits or Rice", price:16, emoji:"🍤", img:"assets/food/blackened-shrimp.jpg",
@@ -162,7 +162,7 @@ SOCO.MENU = [
     spice:2, pop:9, dna:{heat:6,crunch:1,comfort:8,fresh:3,rich:8,sweet:0},
     options:{ label:"Served over", choices:[{label:"Cheesy Grits", delta:0},{label:"Seasoned Rice", delta:0}] },
     pair:"lemonade" },
-  { id:"who-dat", cat:"classics", name:"Who Dat Shrimp or Chicken", price:15, emoji:"⚜️", img:"assets/food/who-dat-chicken.jpg",
+  { id:"who-dat", cat:"classics", name:"Who Dat Shrimp or Chicken", price:15, emoji:"⚜️", img:"assets/food/who-dat-shrimp.jpg",
     desc:"7 shrimp or 4 chicken strips fried in seasoned white flour & tossed in a sweet & spicy Creole sauce. With cajun fries, seasoned rice, grits or spring mix.",
     spice:3, pop:9, dna:{heat:8,crunch:6,comfort:8,fresh:1,rich:7,sweet:5},
     options:{ label:"Pick your player", choices:[{label:"Who Dat Shrimp", delta:0},{label:"Who Dat Chicken Strips", delta:0}] },
@@ -211,10 +211,10 @@ SOCO.MENU = [
   { id:"beignets", cat:"desserts", name:"3 Beignets", price:8, emoji:"☁️", sundayOnly:true,
     desc:"A New Orleans treat! Dough fried & covered with powdered sugar. Served fresh & hot. Sundays only.",
     spice:0, pop:10, dna:{heat:0,crunch:3,comfort:10,fresh:0,rich:6,sweet:10}, pair:"fountain", signature:true },
-  { id:"bread-pudding", cat:"desserts", name:"Linda B's Bread Pudding", price:6.5, emoji:"🍮", img:"assets/food/bread-pudding.jpg",
+  { id:"bread-pudding", cat:"desserts", name:"Linda B's Bread Pudding", price:6.5, emoji:"🍮",
     desc:"Freshly baked & topped with a whisky sauce.",
     spice:0, pop:8, dna:{heat:0,crunch:1,comfort:10,fresh:0,rich:8,sweet:9}, pair:"fountain" },
-  { id:"carrot-cake", cat:"desserts", name:"Stevie B's Carrot Cake", price:6.5, emoji:"🥕",
+  { id:"carrot-cake", cat:"desserts", name:"Stevie B's Carrot Cake", price:6.5, emoji:"🥕", img:"assets/food/carrot-cake.jpg",
     desc:"Homemade carrot cake with cream cheese frosting.",
     spice:0, pop:7, dna:{heat:0,crunch:2,comfort:9,fresh:1,rich:8,sweet:9}, pair:"tea" },
 
@@ -283,12 +283,12 @@ SOCO.BADGES = [
 
 /* ---- Rewards ladder (sample rewards for the demo — not live offers) ---- */
 SOCO.REWARDS = [
-  { id:"r-lemonade", cost:500,  name:"Free Brown Sugar Lemonade", icon:"🍋" },
-  { id:"r-side",     cost:1000, name:"Free Side (any $8 side)",   icon:"🍟" },
-  { id:"r-beignets", cost:1500, name:"Free Beignets on Sunday",   icon:"☁️" },
-  { id:"r-poboy",    cost:2500, name:"Free Po' Boy",              icon:"🥖" },
-  { id:"r-platter",  cost:5000, name:"Seafood Platter on the House", icon:"🏆" },
-  { id:"r-brill",    cost:9000, name:"Brill Brothers' Table — feast for 4 + merch", icon:"👨‍🍳" }
+  { id:"r-lemonade", cost:2500,  name:"Free Brown Sugar Lemonade", icon:"🍋" },
+  { id:"r-side",     cost:5000,  name:"Free Side (any $8 side)",   icon:"🍟" },
+  { id:"r-beignets", cost:7500,  name:"Free Beignets on Sunday",   icon:"☁️" },
+  { id:"r-poboy",    cost:12500, name:"Free Po' Boy",              icon:"🥖" },
+  { id:"r-platter",  cost:25000, name:"Seafood Platter on the House", icon:"🏆" },
+  { id:"r-brill",    cost:50000, name:"Brill Brothers' Table — feast for 4 + merch", icon:"👨‍🍳" }
 ];
 
 /* ---- Helpers ---- */
