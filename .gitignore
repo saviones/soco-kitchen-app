@@ -7,3 +7,8 @@ assets/food/screenshot-3.png
 assets/food/beignets-shutterstock.jpg
 Thumbs.db
 desktop.ini
+# secrets — Toast API credentials live only in local env files, never in the repo
+.env
+.env.*
+.dev.vars
+backend/.dev.vars

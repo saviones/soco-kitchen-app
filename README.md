@@ -30,12 +30,31 @@ and installable (PWA — "Add to Home Screen").
 
 ## About the Toast integration
 
-The demo simulates the loop locally. The production path:
+The app now has a **real Toast integration** (read-only Standard API access) with an
+automatic demo-mode fallback when no backend is reachable:
 
-1. All 4 locations already run on Toast.
-2. Enroll in the **Toast API partner program** (or Toast Loyalty) to receive order webhooks.
-3. A completed order fires a webhook → a small SoCo backend matches the guest phone number → points post to the app.
-4. In-app ordering (not just handoff) is also possible via the Toast Orders API once partner access is granted.
+- **Live hours & open/closed status** from each location's Toast schedule
+- **Live menu prices** from the Toast online-ordering menu
+- **Real order → points sync**: link the phone number used at checkout and the last
+  2 weeks of orders at Castro Valley & Alameda turn into points/quest progress
+  (dedup'd per order, so nothing double-counts)
+
+How it's wired:
+
+- `backend/worker.js` — deployable Cloudflare Worker that holds the Toast credentials
+  and exposes `/api/health`, `/api/locations`, `/api/menu`, `/api/orders?phone=`
+  (returns items + dates only — no names, no payment data)
+- `backend/dev-server.py` — dependency-free local mirror of the worker
+  (`python3 backend/dev-server.py`, reads `.env`, serves on :8788)
+- `js/toast-live.js` + `js/toast-map.js` — frontend live mode + the Toast-name →
+  app-dish mapping table
+- Credentials live in a git-ignored `.env` (`TOAST_CLIENT_ID`, `TOAST_CLIENT_SECRET`,
+  `TOAST_API_HOST`); to go live on GitHub Pages, deploy the worker and set
+  `SOCO.LIVE_API` in `js/data.js` to its URL
+
+Still on the wishlist: Pleasant Hill & San Jose (need adding to the Toast credential
+set), and true in-app ordering + loyalty writes (needs the **Toast partner program**;
+until then checkout hands off to each location's official Toast page).
 
 ## Notes
 

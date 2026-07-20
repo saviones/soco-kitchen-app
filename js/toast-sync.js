@@ -11,6 +11,10 @@
 const ToastSync = (() => {
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
   let el = null;
+  const live = () => window.ToastLive && ToastLive.isOn();
+  const badge = () => live()
+    ? `<span class="demo" style="color:var(--green);border-color:rgba(62,207,124,.5);background:rgba(62,207,124,.1)">● LIVE</span>`
+    : `<span class="demo">Demo Mode</span>`;
 
   function render(target){
     el = target;
@@ -61,6 +65,15 @@ const ToastSync = (() => {
       </div>
       ${vouchers ? `<h2>Your vouchers <span class="rule"></span></h2>${vouchers}` : ""}
 
+      ${live() ? `
+      <h2>Connection <span class="rule"></span></h2>
+      <div class="card">
+        <div class="sub" style="line-height:1.65">
+          <b style="color:var(--green)">✅ Connected to Toast</b> via SoCo's read-only Standard API proxy.<br>
+          Live hours, live menu prices, and real order → points sync for <b>Castro Valley</b> & <b>Alameda</b>.<br>
+          <span class="dim" style="font-size:11px">Pleasant Hill & San Jose join when they're added to the API credential set. In-app ordering needs the Toast partner program — checkout hands off to Toast's page until then.</span>
+        </div>
+      </div>` : `
       <h2>How the real hookup works <span class="rule"></span></h2>
       <div class="card">
         <div class="sub" style="line-height:1.65">
@@ -71,7 +84,7 @@ const ToastSync = (() => {
           4️⃣ Points post here automatically, quest stations light up, streaks & badges fire.<br>
           <span class="dim" style="font-size:11px">Until then, this screen simulates that loop so the whole experience can be play-tested.</span>
         </div>
-      </div>`;
+      </div>`}`;
   }
 
   function linkCard(){
@@ -80,9 +93,11 @@ const ToastSync = (() => {
       return `
         <div class="row" style="justify-content:space-between">
           <span class="toastlogo"><span class="t">T</span> Toast Loyalty</span>
-          <span class="demo">Demo Mode</span>
+          ${badge()}
         </div>
-        <div class="sub mt10">Link the phone number you use at checkout and your real orders turn into quest points — automatically, at all 4 locations.</div>
+        <div class="sub mt10">${live()
+          ? "Link the phone number you use at checkout — your real Toast orders from the last 2 weeks (Castro Valley & Alameda) turn into points automatically."
+          : "Link the phone number you use at checkout and your real orders turn into quest points — automatically, at all 4 locations."}</div>
         <div class="phinput">
           <input id="toastPhone" type="tel" inputmode="tel" placeholder="(510) 555-0134" maxlength="14">
           <button class="btn gold" onclick="ToastSync.link()">Link</button>
@@ -92,20 +107,22 @@ const ToastSync = (() => {
       <div class="order-r">
         <div class="oic">🧾</div>
         <div><b>Order #${o.num}</b> · ${esc(SOCO.loc(o.loc).name)}
-          <div class="ot">${new Date(o.ts).toLocaleString([], {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"})} · ${o.items.map(i => esc(SOCO.item(i).name)).join(", ")}</div>
+          <div class="ot">${new Date(o.ts).toLocaleString([], {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"})} · ${(o.names || o.items.map(i => SOCO.item(i).name)).map(esc).join(", ")}</div>
         </div>
         <div class="opts">+${o.pts}</div>
       </div>`).join("");
     return `
       <div class="row" style="justify-content:space-between">
         <span class="toastlogo"><span class="t">T</span> Toast Loyalty</span>
-        <span class="demo">Demo Mode</span>
+        ${badge()}
       </div>
       <div class="statusbar" style="margin-top:10px"><span class="dot open"></span>
         <div class="grow" style="font-size:12.5px">Linked to <b>${esc(s.toast.phone)}</b> — orders sync to points</div>
       </div>
       <div class="orderfeed">${orders || `<div class="sub center mt10">No synced orders yet.</div>`}</div>
-      <button class="btn wide mt10" onclick="ToastSync.simulateOrder()">⚡ Simulate an incoming Toast order</button>
+      ${live()
+        ? `<button class="btn wide mt10" onclick="ToastLive.syncOrders(true)">🔄 Sync Toast orders now</button>`
+        : `<button class="btn wide mt10" onclick="ToastSync.simulateOrder()">⚡ Simulate an incoming Toast order</button>`}
       <button class="btn small ghost wide mt6" style="color:var(--ink-faint)" onclick="ToastSync.unlink()">Unlink account</button>`;
   }
 
@@ -116,6 +133,14 @@ const ToastSync = (() => {
     const s = Store.state;
     const card = document.getElementById("toastcard");
     card.innerHTML = `<div class="empty"><span class="e">🔗</span>Contacting Toast…<br><span class="dim small">matching your order history</span></div>`;
+    if (live()){
+      s.toast.linked = true;
+      s.toast.phone = `(${val.slice(0,3)}) ${val.slice(3,6)}-${val.slice(6,10)}`;
+      Store.save();
+      App.notify(`Toast linked — checking the last 2 weeks of orders for <b>${esc(s.toast.phone)}</b>`, "🔗", 3600);
+      ToastLive.syncOrders(true).then(() => App.refresh());
+      return;
+    }
     setTimeout(() => {
       s.toast.linked = true;
       s.toast.phone = `(${val.slice(0,3)}) ${val.slice(3,6)}-${val.slice(6,10)}`;
@@ -130,7 +155,8 @@ const ToastSync = (() => {
   }
 
   function unlink(){
-    Store.state.toast = { linked:false, phone:null, orders:[] };
+    // keep `seen` so relinking never double-awards points for the same order
+    Store.state.toast = { linked:false, phone:null, orders:[], seen: Store.state.toast.seen || {} };
     Store.save(); App.refresh();
     App.notify("Toast account unlinked", "🔌", 2200);
   }

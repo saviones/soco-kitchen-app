@@ -180,7 +180,9 @@ const App = (() => {
         <a class="btn small ghost" href="${SOCO.BRAND.instagram}" target="_blank" rel="noopener">📸 @socokitchen</a>
         <a class="btn small ghost" href="${SOCO.BRAND.tiktok}" target="_blank" rel="noopener">🎵 @soco.kitchen</a>
       </div>
-      <div class="notice center">Menu & prices from the posted Castro Valley menu — may vary by location. This app is a concept prototype for Southern Comfort Kitchen.</div>
+      <div class="notice center">${window.ToastLive && ToastLive.isOn()
+        ? "⚡ Live hours & prices synced from Toast. This app is a concept prototype for Southern Comfort Kitchen."
+        : "Menu & prices from the posted Castro Valley menu — may vary by location. This app is a concept prototype for Southern Comfort Kitchen."}</div>
     `;
     renderBeignetCard();
   }
@@ -299,7 +301,9 @@ const App = (() => {
         <div class="chips">${flagChips}</div>
       </div>
       ${body}
-      <div class="notice center">Prices from the posted Castro Valley menu. Each location's live Toast menu governs at checkout.</div>`;
+      <div class="notice center">${window.ToastLive && ToastLive.isOn()
+        ? "⚡ Prices live from Toast online ordering (" + esc(SOCO.loc(ToastLive.pricesFrom() || "cv").name) + ")."
+        : "Prices from the posted Castro Valley menu. Each location's live Toast menu governs at checkout."}</div>`;
   }
   function setQuery(q){ menuFilter.q = q.trim().toLowerCase(); renderMenu(); const el = $("#scr-menu .search"); el.focus(); el.setSelectionRange(el.value.length, el.value.length); }
   function setCat(c){ menuFilter.cat = c; renderMenu(); }

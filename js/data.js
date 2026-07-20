@@ -6,6 +6,11 @@
 
 const SOCO = {};
 
+/* Deployed Toast proxy URL (backend/worker.js on Cloudflare Workers).
+   Empty = demo mode. When running locally, toast-live.js auto-uses
+   http://localhost:8788 (node backend/dev-server.mjs). */
+SOCO.LIVE_API = "";
+
 SOCO.BRAND = {
   name: "Southern Comfort Kitchen",
   short: "SoCo Kitchen",
