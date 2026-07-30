@@ -545,10 +545,10 @@ export default {
         }, request, 200, tenant);
       }
 
-      if (route[0] === "locations" && isGet) return handleLocations(tenant, env, request);
+      if (route[0] === "locations" && isGet) return await handleLocations(tenant, env, request);
 
       if (route[0] === "menu" && isGet) {
-        return handleMenu(tenant, env, request, url.searchParams.get("loc") || Object.keys(tenant.locations)[0]);
+        return await handleMenu(tenant, env, request, url.searchParams.get("loc") || Object.keys(tenant.locations)[0]);
       }
 
       if (route[0] === "rewards" && isGet) {
@@ -558,23 +558,23 @@ export default {
       if (route[0] === "balance" && isGet) {
         const phone = normalizePhone(url.searchParams.get("phone"));
         if (!validPhone(phone)) return json({ error: "phone must be 10 digits" }, request, 400, tenant);
-        return handleBalance(tenant, env, request, phone);
+        return await handleBalance(tenant, env, request, phone);
       }
 
-      if (route[0] === "enroll" && isPost) return handleEnroll(tenant, env, request);
+      if (route[0] === "enroll" && isPost) return await handleEnroll(tenant, env, request);
 
-      if (route[0] === "redeem" && isPost) return handleRedeem(tenant, env, request);
+      if (route[0] === "redeem" && isPost) return await handleRedeem(tenant, env, request);
 
       if (route[0] === "voucher" && route[1]) {
         requireToken(request, "X-Staff-Token", staffToken(tenant, env), "staff token");
         const code = decodeURIComponent(route[1]).toUpperCase();
-        if (route[2] === "burn" && isPost) return handleVoucherBurn(tenant, env, request, code);
-        if (!route[2] && isGet) return handleVoucherLookup(tenant, env, request, code);
+        if (route[2] === "burn" && isPost) return await handleVoucherBurn(tenant, env, request, code);
+        if (!route[2] && isGet) return await handleVoucherLookup(tenant, env, request, code);
       }
 
       if (route[0] === "admin" && route[1]) {
         requireToken(request, "X-Admin-Token", adminToken(tenant, env), "admin token");
-        if (route[1] === "credit" && isPost) return handleAdminCredit(tenant, env, request);
+        if (route[1] === "credit" && isPost) return await handleAdminCredit(tenant, env, request);
         if (route[1] === "sync" && isGet) {
           return json({ ok: true, result: await syncTenant(tenant, env) }, request, 200, tenant);
         }
