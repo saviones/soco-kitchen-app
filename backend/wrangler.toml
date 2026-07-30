@@ -43,7 +43,7 @@ new_sqlite_classes = ["MemberLedger", "SyncState"]
 # `wrangler kv namespace create VOUCHER_INDEX`, then paste the id below.
 [[kv_namespaces]]
 binding = "VOUCHER_INDEX"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "1ba022c3aa18483fa2b9c06d9baa8eb3"
 
 # --- Cron: pushes Toast orders into member ledgers -----------------
 # Points are credited by this, never computed on demand — a balance
