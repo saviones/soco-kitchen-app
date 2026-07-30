@@ -12,3 +12,10 @@ desktop.ini
 .env.*
 .dev.vars
 backend/.dev.vars
+
+# dev ledger state — local test vouchers, never commit
+backend/.ledger-dev.json
+backend/.ledger-dev.tmp
+
+# operating figures — public repo, keep revenue-derivable numbers out
+LAUNCH.local.md

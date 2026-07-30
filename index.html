@@ -60,7 +60,11 @@
   </nav>
 </div>
 
-<script src="js/data.js"></script>
+<!-- engine (tenant-agnostic) → tenant data → runtime SOCO API -->
+<script src="core/rules.js"></script>
+<script src="tenants/soco/config.js"></script>
+<script src="core/tenant.js"></script>
+
 <script src="js/infographics.js"></script>
 <script src="js/game.js"></script>
 <script src="js/toast-map.js"></script>

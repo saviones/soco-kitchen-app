@@ -1,9 +1,10 @@
 /* SoCo Kitchen — offline cache */
-const V = "soco-v4";
+const V = "soco-v5";
 const CORE = [
   "./", "./index.html", "./manifest.webmanifest",
   "./css/app.css",
-  "./js/data.js", "./js/infographics.js", "./js/game.js", "./js/toast-sync.js", "./js/app.js",
+  "./core/rules.js", "./tenants/soco/config.js", "./core/tenant.js",
+  "./js/infographics.js", "./js/game.js", "./js/toast-sync.js", "./js/app.js",
   "./assets/brand/logo.png", "./assets/brand/hero.jpg", "./assets/brand/icon-192.png", "./assets/brand/icon-512.png"
 ];
 

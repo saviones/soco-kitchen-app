@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Voucher Check — Staff</title>
+<meta name="theme-color" content="#160b2e">
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root{
+    --bg:#160b2e; --card:#20123f; --line:#33205c; --ink:#f4eeff; --dim:#9a87c7;
+    --gold:#ffc93c; --green:#3ecf7c; --red:#ff6b5e; --amber:#ffa63c;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+  .wrap{max-width:460px;margin:0 auto;padding:20px 16px 40px}
+  h1{font-size:19px;margin:0;letter-spacing:.2px}
+  .sub{color:var(--dim);font-size:12.5px}
+  header{display:flex;align-items:center;gap:10px;margin-bottom:18px}
+  header .fleur{font-size:24px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:12px}
+  label{display:block;font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-bottom:6px}
+  input{width:100%;background:#160b2e;border:1px solid var(--line);border-radius:11px;
+    color:var(--ink);padding:13px 14px;font-size:16px;font-family:inherit}
+  input:focus{outline:none;border-color:var(--gold)}
+  #code{font:700 26px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace;
+    text-align:center;letter-spacing:2.5px;text-transform:uppercase}
+  button{width:100%;border:0;border-radius:11px;padding:15px;font:700 15px inherit;
+    background:var(--gold);color:#2a1852;cursor:pointer;margin-top:10px}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--dim);font-weight:600;font-size:13px;padding:11px}
+  button.danger{background:var(--green);color:#0d2f1c}
+  .res{text-align:center;padding:22px 16px}
+  .res .icon{font-size:44px;line-height:1}
+  .res .big{font-size:20px;font-weight:800;margin-top:10px}
+  .res .note{font-size:13px;color:var(--dim);margin-top:6px}
+  .ok{border-color:rgba(62,207,124,.55)}    .ok .big{color:var(--green)}
+  .bad{border-color:rgba(255,107,94,.55)}   .bad .big{color:var(--red)}
+  .warn{border-color:rgba(255,166,60,.55)}  .warn .big{color:var(--amber)}
+  .meta{display:flex;justify-content:space-between;gap:12px;font-size:12px;
+    color:var(--dim);border-top:1px solid var(--line);padding-top:10px;margin-top:14px;text-align:left}
+  .hide{display:none}
+  .setuplink{background:none;border:0;color:var(--dim);font-size:12px;
+    text-decoration:underline;width:auto;padding:0;margin:18px auto 0;display:block;cursor:pointer}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <span class="fleur">⚜️</span>
+    <div>
+      <h1>Voucher Check</h1>
+      <div class="sub" id="tenantLbl">—</div>
+    </div>
+  </header>
+
+  <!-- ---------- setup ---------- -->
+  <div id="setup" class="card hide">
+    <label for="api">Backend URL</label>
+    <input id="api" type="url" placeholder="https://rewards.example.workers.dev" autocomplete="off">
+    <div style="height:12px"></div>
+    <label for="tenant">Restaurant ID</label>
+    <input id="tenant" type="text" placeholder="soco" autocomplete="off">
+    <div style="height:12px"></div>
+    <label for="token">Staff token</label>
+    <input id="token" type="password" placeholder="from your manager" autocomplete="off">
+    <div style="height:12px"></div>
+    <label for="who">Your name (shows on the receipt log)</label>
+    <input id="who" type="text" placeholder="e.g. Marcus" autocomplete="off">
+    <button onclick="Staff.saveSetup()">Save</button>
+  </div>
+
+  <!-- ---------- scan ---------- -->
+  <div id="scan" class="hide">
+    <div class="card">
+      <label for="code">Voucher code</label>
+      <input id="code" type="text" inputmode="latin" autocapitalize="characters"
+             autocomplete="off" spellcheck="false" placeholder="SOCO-XXXX-XXXX" maxlength="14">
+      <button id="checkBtn" onclick="Staff.check()">Check code</button>
+    </div>
+    <div id="result"></div>
+    <button class="setuplink" onclick="Staff.showSetup()">Settings</button>
+  </div>
+
+</div>
+
+<script>
+const Staff = (() => {
+  const KEY = "staff_cfg_v1";
+  let cfg = {};
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s == null ? "" : s)
+    .replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
+
+  function load(){
+    try { cfg = JSON.parse(localStorage.getItem(KEY)) || {}; } catch(e){ cfg = {}; }
+    const ready = cfg.api && cfg.tenant && cfg.token;
+    $("setup").classList.toggle("hide", !!ready);
+    $("scan").classList.toggle("hide", !ready);
+    $("tenantLbl").textContent = ready ? `${cfg.tenant} · ${cfg.who || "counter"}` : "First-time setup";
+    if (ready) $("code").focus();
+    else ["api","tenant","token","who"].forEach(k => { if (cfg[k]) $(k).value = cfg[k]; });
+  }
+
+  function showSetup(){
+    ["api","tenant","token","who"].forEach(k => { if (cfg[k]) $(k).value = cfg[k]; });
+    $("setup").classList.remove("hide");
+    $("scan").classList.add("hide");
+  }
+
+  function saveSetup(){
+    cfg = {
+      api: $("api").value.trim().replace(/\/+$/, ""),
+      tenant: $("tenant").value.trim().toLowerCase(),
+      token: $("token").value.trim(),
+      who: $("who").value.trim(),
+    };
+    if (!cfg.api || !cfg.tenant || !cfg.token){ alert("Backend URL, restaurant ID and staff token are all required."); return; }
+    localStorage.setItem(KEY, JSON.stringify(cfg));
+    $("result").innerHTML = "";
+    load();
+  }
+
+  const base = () => `${cfg.api}/api/v1/${encodeURIComponent(cfg.tenant)}`;
+  const headers = () => ({ "Content-Type": "application/json", "X-Staff-Token": cfg.token });
+
+  function card(cls, icon, big, note, voucher, actions){
+    const when = v => v ? new Date(v).toLocaleString([], {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"}) : "—";
+    return `<div class="card ${cls}">
+      <div class="res">
+        <div class="icon">${icon}</div>
+        <div class="big">${esc(big)}</div>
+        <div class="note">${note}</div>
+      </div>
+      ${voucher ? `<div class="meta">
+        <span>Issued ${when(voucher.issuedAt)}</span>
+        <span>${voucher.status === "burned" ? `Redeemed ${when(voucher.burnedAt)}` : `Expires ${when(voucher.expiresAt)}`}</span>
+      </div>` : ""}
+      ${actions || ""}
+    </div>`;
+  }
+
+  const busy = b => { $("checkBtn").disabled = b; $("checkBtn").textContent = b ? "Checking…" : "Check code"; };
+
+  async function check(){
+    const code = $("code").value.trim().toUpperCase();
+    if (!code){ $("code").focus(); return; }
+    busy(true);
+    try {
+      const r = await fetch(`${base()}/voucher/${encodeURIComponent(code)}`, { headers: headers() });
+      if (r.status === 401){
+        $("result").innerHTML = card("bad", "🔒", "Not authorised", "That staff token was rejected. Check Settings.");
+        return;
+      }
+      const data = await r.json();
+      if (!data.ok || !data.voucher){
+        $("result").innerHTML = card("bad", "❌", "No such code",
+          "Nothing was ever issued with this code. Check for typos — codes never contain 0, O, 1, I or L.");
+        return;
+      }
+      const v = data.voucher;
+      if (v.status === "burned"){
+        $("result").innerHTML = card("bad", "🚫", "Already redeemed",
+          `<b>${esc(v.name)}</b> was redeemed by ${esc(v.burnedBy || "counter")}. Do not honour it again.`, v);
+        return;
+      }
+      if (Date.now() > v.expiresAt){
+        $("result").innerHTML = card("warn", "⏳", "Expired",
+          `<b>${esc(v.name)}</b> — this voucher is past its expiry date.`, v);
+        return;
+      }
+      $("result").innerHTML = card("ok", v.icon || "🎁", "Valid",
+        `<b>${esc(v.name)}</b><br>Guest ${esc(data.phone || "")}`, v,
+        `<button class="danger" onclick="Staff.burn('${esc(v.code)}')">Give the item &amp; mark redeemed</button>
+         <button class="ghost" onclick="Staff.reset()">Cancel</button>`);
+    } catch(e){
+      $("result").innerHTML = card("bad", "📡", "Can't reach the backend",
+        "Check the till's internet connection, then try again.");
+    } finally { busy(false); }
+  }
+
+  async function burn(code){
+    try {
+      const r = await fetch(`${base()}/voucher/${encodeURIComponent(code)}/burn`, {
+        method: "POST", headers: headers(), body: JSON.stringify({ staff: cfg.who || "counter" }),
+      });
+      const data = await r.json();
+      if (data.ok){
+        $("result").innerHTML = card("ok", "✅", "Redeemed",
+          `<b>${esc(data.voucher.name)}</b> — hand it over. This code is now dead.`, data.voucher,
+          `<button class="ghost" onclick="Staff.reset()">Next guest</button>`);
+      } else if (data.reason === "already_redeemed"){
+        $("result").innerHTML = card("bad", "🚫", "Already redeemed",
+          "Someone else burned this code first. Do not honour it.", data.voucher,
+          `<button class="ghost" onclick="Staff.reset()">Next guest</button>`);
+      } else {
+        $("result").innerHTML = card("bad", "⚠️", "Couldn't redeem",
+          esc(data.reason || "unknown error"), data.voucher,
+          `<button class="ghost" onclick="Staff.reset()">Next guest</button>`);
+      }
+    } catch(e){
+      $("result").innerHTML = card("bad", "📡", "Can't reach the backend",
+        "The code was NOT marked redeemed. Try again before handing anything over.");
+    }
+  }
+
+  function reset(){ $("result").innerHTML = ""; $("code").value = ""; $("code").focus(); }
+
+  document.addEventListener("DOMContentLoaded", () => {
+    load();
+    $("code").addEventListener("keydown", e => { if (e.key === "Enter") check(); });
+  });
+
+  return { check, burn, reset, saveSetup, showSetup };
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+{
+  "_comment": [
+    "Tenant registry — the single source of truth for both backends:",
+    "backend/tenants.js (Cloudflare Worker) and backend/dev-server.py (local).",
+    "",
+    "The server, never the client, owns anything with money attached:",
+    "which Toast locations a tenant has, the earn rate, and reward costs.",
+    "",
+    "Secrets are NOT here. Each tenant names the env vars holding its",
+    "credentials; values come from `wrangler secret put <NAME>` or .env.",
+    "",
+    "Adding a restaurant is a new entry here plus its secrets. No code changes."
+  ],
+
+  "tenants": {
+    "soco": {
+      "id": "soco",
+      "name": "Southern Comfort Kitchen",
+      "codePrefix": "SOCO",
+
+      "_origins": "Browsers allowed to call this tenant's API. localhost is always permitted for development.",
+      "origins": ["https://saviones.github.io"],
+
+      "secrets": {
+        "clientId": "TOAST_SOCO_CLIENT_ID",
+        "clientSecret": "TOAST_SOCO_CLIENT_SECRET",
+        "staffToken": "STAFF_TOKEN_SOCO",
+        "adminToken": "ADMIN_TOKEN_SOCO"
+      },
+
+      "_locations": "Toast restaurant GUIDs. Not secret — they appear in public ordering URLs. null = not in this credential set yet.",
+      "locations": {
+        "cv": "70015dc4-f626-4a4b-b15a-30c341b4e6c0",
+        "al": "edfb0ad7-5a52-4a19-8f2c-c80a1d427bce",
+        "ph": null,
+        "sj": null
+      },
+
+      "_allowlist": [
+        "SOFT LAUNCH GATE. Launch runs without SMS verification, so a phone",
+        "number is the only thing identifying a guest. Only numbers listed here",
+        "can earn or redeem — an unenrolled number gets nothing, so guessing a",
+        "number gains an attacker nothing unless it is already enrolled.",
+        "",
+        "10 digits, no punctuation. [] means nobody (fails closed).",
+        "Set to null to open enrolment to everyone — only once OTP is live."
+      ],
+      "allowlist": [],
+
+      "_earn": "pointsPerDollar x item price. See LAUNCH.local.md (gitignored) for the measured average ticket and points per visit.",
+      "pointsPerDollar": 10,
+
+      "_lookbackDays": "Used only by backend/backfill.py for the one-time history import. The cron sync walks forward from its own cursor.",
+      "lookbackDays": 90,
+
+      "voucherTtlDays": 60,
+
+      "_rewards": [
+        "Calibrated July 2026 against the measured Castro Valley average",
+        "ticket (see LAUNCH.local.md, gitignored). First reward lands at about",
+        "3 visits; blended giveback ~2.5-4%, against a restaurant-loyalty norm",
+        "of 2-5%. The previous ladder put the first reward 7+ visits out at",
+        "~1.2%, which most guests would never have reached.",
+        "",
+        "Costs here are authoritative. The app displays them but the server",
+        "prices every redemption from this table."
+      ],
+      "rewardsEnabled": true,
+      "rewards": [
+        { "id": "r-lemonade", "cost": 1000,  "name": "Free Brown Sugar Lemonade", "icon": "🍋" },
+        { "id": "r-side",     "cost": 2000,  "name": "Free Side (any $8 side)",   "icon": "🍟" },
+        { "id": "r-beignets", "cost": 3500,  "name": "Free Beignets on Sunday",   "icon": "☁️" },
+        { "id": "r-poboy",    "cost": 6000,  "name": "Free Po' Boy",              "icon": "🥖" },
+        { "id": "r-platter",  "cost": 12000, "name": "Seafood Platter on the House", "icon": "🏆" },
+        { "id": "r-brill",    "cost": 28000, "name": "Brill Brothers' Table — feast for 4 + merch", "icon": "👨‍🍳" }
+      ]
+    }
+  }
+}

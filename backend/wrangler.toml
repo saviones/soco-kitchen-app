@@ -1,0 +1,60 @@
+name = "restaurant-rewards"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# tenants.json is imported by worker.js
+rules = [
+  { type = "Data", globs = ["**/*.json"], fallthrough = true }
+]
+
+[vars]
+TOAST_API_HOST = "https://ws-api.toasttab.com"
+
+# --- Durable Objects -----------------------------------------------
+# MEMBER_LEDGER: one instance per (tenant, phone). This is what makes
+# redeem/burn atomic — without it, two taps a few hundred ms apart can
+# both pass the balance check and double-spend.
+#
+# SYNC_STATE: one per tenant, holding the cron's per-location cursors.
+# These are NOT in KV because the cron writes one every pass (288/day
+# per location at */5) and the KV free plan allows 1,000 writes/day in
+# total. Durable Object storage allows ~3M writes/month free.
+#
+# SQLite-backed Durable Objects are available on the Workers Free plan,
+# and free-plan SQLite storage is not billed.
+[[durable_objects.bindings]]
+name = "MEMBER_LEDGER"
+class_name = "MemberLedger"
+
+[[durable_objects.bindings]]
+name = "SYNC_STATE"
+class_name = "SyncState"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["MemberLedger", "SyncState"]
+
+# --- KV: voucher code -> "tenant:phone" ----------------------------
+# Written once per redemption only — a few writes a day, nowhere near
+# the 1,000/day free limit. Eventual consistency is fine here because
+# the authoritative voucher record lives in the Durable Object.
+# Create with:  wrangler kv namespace create VOUCHER_INDEX
+[[kv_namespaces]]
+binding = "VOUCHER_INDEX"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+
+# --- Cron: pushes Toast orders into member ledgers -----------------
+# Points are credited by this, never computed on demand — a balance
+# read must not depend on a Toast round-trip. Every 5 minutes is well
+# inside the subrequest budget at Castro Valley's measured order volume.
+[triggers]
+crons = ["*/5 * * * *"]
+
+# --- Secrets (set with `wrangler secret put <NAME>`) ---------------
+#   TOAST_SOCO_CLIENT_ID
+#   TOAST_SOCO_CLIENT_SECRET
+#   STAFF_TOKEN_SOCO          <- give this to counter staff for /staff
+#   ADMIN_TOKEN_SOCO          <- backfill + manual sync; keep to owners
+#
+# Adding a restaurant: add its entry to tenants.json, then set that
+# tenant's four secrets. No code change.

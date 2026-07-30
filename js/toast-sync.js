@@ -12,6 +12,18 @@ const ToastSync = (() => {
   const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
   let el = null;
   const live = () => window.ToastLive && ToastLive.isOn();
+
+  /* Two currencies, deliberately:
+       quest points  — Store.state.points, from manually logged dishes.
+                       Drives levels/badges/the map. Self-reported, so it
+                       stays on the device and buys nothing.
+       reward points — the server wallet, derived from real Toast orders.
+                       The only currency that can be spent on food.
+     In demo mode (no backend) there is no wallet, so the ladder falls
+     back to quest points and every voucher is stamped DEMO. */
+  const wallet = () => (live() && ToastLive.wallet) ? ToastLive.wallet() : null;
+  const spendable = () => { const w = wallet(); return w ? w.balance : Store.state.points; };
+  const voucherList = () => { const w = wallet(); return w ? (w.vouchers || []) : Store.state.vouchers; };
   const badge = () => live()
     ? `<span class="demo" style="color:var(--green);border-color:rgba(62,207,124,.5);background:rgba(62,207,124,.1)">● LIVE</span>`
     : `<span class="demo">Demo Mode</span>`;
@@ -21,25 +33,37 @@ const ToastSync = (() => {
     const s = Store.state;
     const lvl = Game.levelFor(s.points);
 
+    const bal = spendable();
+    const vlist = voucherList();
+
     const ladder = SOCO.REWARDS.map(r => {
-      const can = s.points >= r.cost;
-      const claimed = s.vouchers.some(v => v.rid === r.id);
+      const can = bal >= r.cost;
+      /* an unburned voucher for this reward is already in the guest's wallet */
+      const held = vlist.some(v => (v.rewardId || v.rid) === r.id && v.status !== "burned");
       return `<div class="rrow">
         <div class="ri">${r.icon}</div>
         <div class="rn">${esc(r.name)}<div class="rc">${r.cost.toLocaleString()} pts</div></div>
-        <button class="btn small ${can ? "gold" : ""}" ${can && !claimed ? "" : "disabled"}
-          onclick="ToastSync.redeem('${r.id}')">${claimed ? "Claimed ✓" : can ? "Redeem" : "🔒"}</button>
+        <button class="btn small ${can ? "gold" : ""}" ${can && !held ? "" : "disabled"}
+          onclick="ToastSync.redeem('${r.id}')">${held ? "In wallet ✓" : can ? "Redeem" : "🔒"}</button>
       </div>`;
     }).join("");
 
-    const vouchers = s.vouchers.length ? s.vouchers.map(v => `
-      <div class="voucher">
+    const vouchers = vlist.length ? vlist.map(v => {
+      const burned = v.status === "burned";
+      const expired = v.expiresAt && Date.now() > v.expiresAt && !burned;
+      const note = burned ? `Redeemed ${new Date(v.burnedAt).toLocaleDateString()} · spent`
+        : expired ? "Expired"
+        : live() ? "Show this code at the counter"
+        : "Sample voucher — demo mode, not redeemable";
+      return `
+      <div class="voucher" style="${burned || expired ? "opacity:.5" : ""}">
         <div class="row"><span style="font-size:20px">${v.icon}</span>
           <div class="grow"><b style="font-size:13px">${esc(v.name)}</b>
-          <div class="code mt6">${v.code}</div></div>
+          <div class="code mt6">${esc(v.code)}</div></div>
         </div>
-        <div class="sub" style="font-size:10px;margin-top:6px">Show at the counter · sample voucher, not redeemable</div>
-      </div>`).join("") : "";
+        <div class="sub" style="font-size:10px;margin-top:6px">${esc(note)}</div>
+      </div>`;
+    }).join("") : "";
 
     el.innerHTML = `
       <h1 class="mt6">Rewards</h1>
@@ -49,10 +73,16 @@ const ToastSync = (() => {
         <div class="lvlrow">
           <div class="lvlicon">⚜️</div>
           <div class="grow">
-            <div class="lvlname">${s.points.toLocaleString()} points</div>
-            <div class="lvlpts">${lvl.icon} ${esc(lvl.name)} · ${s.lifetimePoints.toLocaleString()} lifetime</div>
+            <div class="lvlname">${bal.toLocaleString()} points</div>
+            <div class="lvlpts">${wallet()
+              ? `spendable · earned from ${wallet().orderCount || 0} Toast order${wallet().orderCount === 1 ? "" : "s"}`
+              : `${lvl.icon} ${esc(lvl.name)} · ${s.lifetimePoints.toLocaleString()} lifetime`}</div>
           </div>
         </div>
+        ${wallet() ? `<div class="sub" style="font-size:11px;margin-top:8px;border-top:1px solid var(--line);padding-top:8px">
+          ${lvl.icon} <b>${esc(lvl.name)}</b> · ${s.points.toLocaleString()} quest points from dishes you've logged
+          <span class="dim">— quest points rank you up; only Toast orders buy food.</span>
+        </div>` : ""}
       </div>
 
       <h2>Toast account link <span class="rule"></span></h2>
@@ -103,10 +133,26 @@ const ToastSync = (() => {
           <button class="btn gold" onclick="ToastSync.link()">Link</button>
         </div>`;
     }
+    /* soft launch: only enrolled numbers exist, so say so plainly
+       instead of showing an empty wallet that looks broken */
+    if (live() && ToastLive.isEnrolled && !ToastLive.isEnrolled()){
+      return `
+        <div class="row" style="justify-content:space-between">
+          <span class="toastlogo"><span class="t">T</span> Toast Loyalty</span>
+          ${badge()}
+        </div>
+        <div class="notice mt10" style="line-height:1.6">
+          <b>${esc(s.toast.phone)} isn't in the rewards programme yet.</b><br>
+          We're running a small pilot at <b>Castro Valley</b> while we get it right.
+          Ask at the counter to be added — then your orders start banking points.
+        </div>
+        <button class="btn small ghost wide mt10" style="color:var(--ink-faint)" onclick="ToastSync.unlink()">Use a different number</button>`;
+    }
+
     const orders = s.toast.orders.slice().reverse().map(o => `
       <div class="order-r">
         <div class="oic">🧾</div>
-        <div><b>Order #${o.num}</b> · ${esc(SOCO.loc(o.loc).name)}
+        <div><b>Order #${o.num}</b> · ${esc((SOCO.loc(o.loc) || {}).name || "SoCo")}
           <div class="ot">${new Date(o.ts).toLocaleString([], {month:"short", day:"numeric", hour:"numeric", minute:"2-digit"})} · ${(o.names || o.items.map(i => SOCO.item(i).name)).map(esc).join(", ")}</div>
         </div>
         <div class="opts">+${o.pts}</div>
@@ -194,16 +240,41 @@ const ToastSync = (() => {
     App.refresh();
   }
 
-  function redeem(rid){
+  /* LIVE: the server prices the reward, checks the balance and mints the
+     code. The browser only names which reward it wants — it cannot set
+     the price, the balance, or the code.
+     DEMO: no backend, so this stays a local simulation and every voucher
+     it produces is labelled as such and worth nothing at the counter. */
+  async function redeem(rid){
     const r = SOCO.REWARDS.find(x => x.id === rid);
+    if (!r) return;
+
+    if (live()){
+      App.notify("Issuing your voucher…", "⏳", 1800);
+      try {
+        const res = await ToastLive.redeemReward(rid);
+        Game.confetti(130);
+        App.notify(`Redeemed: <b>${esc(r.name)}</b> 🎉<br>Code <b>${esc(res.voucher.code)}</b> — show it at the counter`, r.icon, 6000);
+      } catch(e){
+        const d = e.data || {};
+        if (d.reason === "insufficient_points"){
+          App.notify(`Not enough points yet — <b>${(d.cost - d.balance).toLocaleString()}</b> to go`, "🔒", 3600);
+        } else {
+          App.notify("Couldn't reach the rewards server — nothing was charged. Try again.", "📡", 3600);
+        }
+      }
+      App.refresh(); App.updateHeader();
+      return;
+    }
+
     const s = Store.state;
     if (s.points < r.cost) return;
     s.points -= r.cost;
-    const code = "SOCO-" + Math.random().toString(36).slice(2,6).toUpperCase() + "-" + Math.random().toString(36).slice(2,6).toUpperCase();
-    s.vouchers.push({ rid, name: r.name, icon: r.icon, code, ts: Date.now(), cost: r.cost });
+    const code = "DEMO-" + Math.random().toString(36).slice(2,6).toUpperCase() + "-" + Math.random().toString(36).slice(2,6).toUpperCase();
+    s.vouchers.push({ rewardId: rid, name: r.name, icon: r.icon, code, ts: Date.now(), cost: r.cost, status: "issued" });
     Store.save();
     Game.confetti(130);
-    App.notify(`Redeemed: <b>${esc(r.name)}</b> 🎉 Voucher ${code}`, r.icon, 4600);
+    App.notify(`Redeemed: <b>${esc(r.name)}</b> 🎉 Demo voucher ${code}`, r.icon, 4600);
     App.refresh(); App.updateHeader();
   }
 

@@ -1,17 +1,21 @@
 /* ============================================================
-   SoCo Kitchen App — Data
-   Menu transcribed from the real Castro Valley menu (socokitchen.net).
-   Prices/items as of the posted menu; may vary by location.
+   TENANT CONFIG — Southern Comfort Kitchen (SoCo Kitchen)
+   ------------------------------------------------------------
+   Everything in this file is plain, serialisable data. No
+   functions, no closures — so a second restaurant is a copy of
+   this file with different values, not a code change.
+
+   core/tenant.js turns this into the runtime SOCO.* API that
+   the app screens consume.
    ============================================================ */
 
-const SOCO = {};
+const T = { id: "soco", version: 1 };
 
-/* Deployed Toast proxy URL (backend/worker.js on Cloudflare Workers).
-   Empty = demo mode. When running locally, toast-live.js auto-uses
-   http://localhost:8788 (node backend/dev-server.mjs). */
-SOCO.LIVE_API = "";
+/* Deployed Toast proxy URL (backend/worker.js). Empty = demo mode.
+   Locally, toast-live.js falls back to http://localhost:8788. */
+T.LIVE_API = "";
 
-SOCO.BRAND = {
+T.BRAND = {
   name: "Southern Comfort Kitchen",
   short: "SoCo Kitchen",
   tagline: "Comfort In Every Bite!",
@@ -25,7 +29,7 @@ SOCO.BRAND = {
 };
 
 /* ---- Locations (hours: [Sun..Sat] as [openMin, closeMin] or null=closed) ---- */
-SOCO.LOCATIONS = [
+T.LOCATIONS = [
   {
     id: "cv", name: "Castro Valley", tag: "The Flagship · Since 2013",
     addr: "3571 Castro Valley Blvd, Castro Valley, CA 94546",
@@ -65,7 +69,7 @@ SOCO.LOCATIONS = [
    pop: fan-favorite score 1-10 (editorial)
    quest: counts toward "eat the whole menu" (drinks don't)
 ---- */
-SOCO.CATS = [
+T.CATS = [
   { id: "sides",      name: "Starters & Sides",    line: "St. Charles Line",  color: "#3ecf7c", emoji: "🍟" },
   { id: "salads",     name: "Salads",              line: "Esplanade Line",    color: "#a7e163", emoji: "🥗" },
   { id: "classics",   name: "New Orleans Classics",line: "Canal St. Line",    color: "#ff6b5e", emoji: "🍲" },
@@ -75,7 +79,7 @@ SOCO.CATS = [
   { id: "drinks",     name: "Drinks",              line: "Frenchmen St. Line",color: "#b28dff", emoji: "🥤" }
 ];
 
-SOCO.MENU = [
+T.MENU = [
   /* -------- Starters & Sides -------- */
   { id:"hush-puppies", cat:"sides", name:"Hush Puppies", price:8, emoji:"🌽",
     desc:"Savory deep-fried balls made from corn meal batter.",
@@ -237,7 +241,7 @@ SOCO.MENU = [
 ];
 
 /* ---- Game levels ---- */
-SOCO.LEVELS = [
+T.LEVELS = [
   { at: 0,    name: "Tourist",                icon: "🧳" },
   { at: 600,  name: "French Quarter Freshman",icon: "🎺" },
   { at: 1500, name: "Bayou Regular",          icon: "🐊" },
@@ -246,59 +250,82 @@ SOCO.LEVELS = [
   { at: 9000, name: "Honorary Brill Brother", icon: "🏆" }
 ];
 
-/* ---- Badges ---- */
-SOCO.BADGES = [
+/* ---- Rewards ladder (sample rewards for the demo — not live offers) ---- */
+
+/* ---- Badges ----
+   Declarative rules, evaluated by core/rules.js. Rule types:
+     eaten_count       {min}            — N distinct dishes logged
+     all_of            {ids:[]}         — every listed dish logged
+     category_complete {cat}            — every quest dish in a category
+     count_where       {where,min}      — N dishes matching a field filter
+     quest_pct         {min}            — % of the quest menu logged
+     quest_complete    {}               — the entire quest menu
+   `where` filters compare menu-item fields: {gte,lte,eq}.
+---- */
+T.BADGES = [
   { id:"first-taste", name:"First Bite on Bourbon", icon:"🎉",
     desc:"Log your first SoCo dish.",
-    test: s => Object.keys(s.eaten).length >= 1 },
+    rule:{ type:"eaten_count", min:1 } },
   { id:"poboy-royalty", name:"Po' Boy Royalty", icon:"👑",
     desc:"Eat all 6 Po' Boys.",
-    test: s => SOCO.MENU.filter(m=>m.cat==="poboys").every(m=>s.eaten[m.id]) },
+    rule:{ type:"category_complete", cat:"poboys" } },
   { id:"gumbo-guru", name:"Gumbo Guru", icon:"🥣",
     desc:"Gumbo, étouffée & jambalaya — cups or bowls, all of them.",
-    test: s => ["gumbo","gumbo-cup","etouffee","etouffee-cup","jambalaya","jambalaya-cup"].every(id=>s.eaten[id]) },
+    rule:{ type:"all_of", ids:["gumbo","gumbo-cup","etouffee","etouffee-cup","jambalaya","jambalaya-cup"] } },
   { id:"fry-baby", name:"Fry Baby", icon:"🍟",
     desc:"Regular fries, Cajun fries AND Crab Cajun Fries.",
-    test: s => ["regular-fries","cajun-fries","crab-cajun-fries"].every(id=>s.eaten[id]) },
+    rule:{ type:"all_of", ids:["regular-fries","cajun-fries","crab-cajun-fries"] } },
   { id:"fire-walker", name:"Creole Fire Walker", icon:"🔥",
     desc:"Eat 5 different dishes rated 🌶🌶 or hotter.",
-    test: s => SOCO.MENU.filter(m=>m.spice>=2 && s.eaten[m.id]).length >= 5 },
+    rule:{ type:"count_where", where:{ spice:{ gte:2 } }, min:5 } },
   { id:"sugar-rush", name:"Sugar Rush", icon:"🍰",
     desc:"Clear the whole dessert line.",
-    test: s => SOCO.MENU.filter(m=>m.cat==="desserts").every(m=>s.eaten[m.id]) },
+    rule:{ type:"category_complete", cat:"desserts" } },
   { id:"sunday-society", name:"Sunday Beignet Society", icon:"☁️",
     desc:"Beignets. It has to be beignets.",
-    test: s => !!s.eaten["beignets"] },
+    rule:{ type:"all_of", ids:["beignets"] } },
   { id:"who-dat-nation", name:"Who Dat Nation", icon:"⚜️",
     desc:"Who Dat AND Lil Weezy. Respect.",
-    test: s => !!s.eaten["who-dat"] && !!s.eaten["lil-weezy"] },
+    rule:{ type:"all_of", ids:["who-dat","lil-weezy"] } },
   { id:"muffaletta-mountain", name:"Muffaletta Mountain", icon:"⛰️",
     desc:"Take on the Muffaletta.",
-    test: s => !!s.eaten["muffaletta"] },
+    rule:{ type:"all_of", ids:["muffaletta"] } },
   { id:"sea-legend", name:"Gulf Coast Legend", icon:"🌊",
     desc:"Every fried seafood classic, plus the Seafood Platter.",
-    test: s => ["fried-catfish","fried-shrimp","fried-oysters","soft-shell-crab","fifty-fifty","seafood-platter"].every(id=>s.eaten[id]) },
+    rule:{ type:"all_of", ids:["fried-catfish","fried-shrimp","fried-oysters","soft-shell-crab","fifty-fifty","seafood-platter"] } },
   { id:"halfway", name:"Halfway to Heaven", icon:"🌗",
     desc:"Try 50% of the food menu.",
-    test: s => { const q=SOCO.MENU.filter(m=>m.quest!==false); return q.filter(m=>s.eaten[m.id]).length >= Math.ceil(q.length/2); } },
+    rule:{ type:"quest_pct", min:50 } },
   { id:"whole-hog", name:"THE WHOLE HOG", icon:"🐷",
     desc:"Eat the ENTIRE food menu. All 40 dishes. Menu Legend status.",
-    test: s => SOCO.MENU.filter(m=>m.quest!==false).every(m=>s.eaten[m.id]) }
+    rule:{ type:"quest_complete" } }
 ];
 
-/* ---- Rewards ladder (sample rewards for the demo — not live offers) ---- */
-SOCO.REWARDS = [
-  { id:"r-lemonade", cost:2500,  name:"Free Brown Sugar Lemonade", icon:"🍋" },
-  { id:"r-side",     cost:5000,  name:"Free Side (any $8 side)",   icon:"🍟" },
-  { id:"r-beignets", cost:7500,  name:"Free Beignets on Sunday",   icon:"☁️" },
-  { id:"r-poboy",    cost:12500, name:"Free Po' Boy",              icon:"🥖" },
-  { id:"r-platter",  cost:25000, name:"Seafood Platter on the House", icon:"🏆" },
-  { id:"r-brill",    cost:50000, name:"Brill Brothers' Table — feast for 4 + merch", icon:"👨‍🍳" }
+/* ---- Rewards ladder ----
+   `cost` is in points. Redemption is server-authoritative: the
+   worker checks the balance and issues the code (see backend/lib/ledger.js).
+   Set T.REWARDS_ENABLED = false to switch the rewards programme off
+   entirely for a tenant that does not want one. */
+T.REWARDS_ENABLED = true;
+
+/* Points earned per dollar spent. Tune per tenant — it rescales the
+   whole economy, so move the reward costs below with it. */
+T.POINTS_PER_DOLLAR = 10;
+
+/* DISPLAY ONLY — backend/tenants.json holds the authoritative costs and
+   prices every redemption. The app fetches that ladder at boot and
+   overwrites these; they are the offline/demo fallback, kept in step by hand.
+
+   Calibrated July 2026 against the measured Castro Valley average ticket
+   (see LAUNCH.local.md, gitignored): the first reward lands at about 3
+   visits and the ladder gives back ~2.5-4%. */
+T.REWARDS = [
+  { id:"r-lemonade", cost:1000,  name:"Free Brown Sugar Lemonade", icon:"🍋" },
+  { id:"r-side",     cost:2000,  name:"Free Side (any $8 side)",   icon:"🍟" },
+  { id:"r-beignets", cost:3500,  name:"Free Beignets on Sunday",   icon:"☁️" },
+  { id:"r-poboy",    cost:6000,  name:"Free Po' Boy",              icon:"🥖" },
+  { id:"r-platter",  cost:12000, name:"Seafood Platter on the House", icon:"🏆" },
+  { id:"r-brill",    cost:28000, name:"Brill Brothers' Table — feast for 4 + merch", icon:"👨‍🍳" }
 ];
 
-/* ---- Helpers ---- */
-SOCO.item = id => SOCO.MENU.find(m => m.id === id);
-SOCO.cat  = id => SOCO.CATS.find(c => c.id === id);
-SOCO.loc  = id => SOCO.LOCATIONS.find(l => l.id === id);
-SOCO.questItems = () => SOCO.MENU.filter(m => m.quest !== false);
-SOCO.basePts = m => Math.round(m.price * 10);
+window.TENANT_CONFIG = T;

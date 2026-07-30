@@ -80,7 +80,12 @@ const App = (() => {
   function updateHeader(){
     const s = Store.state;
     $("#locChipTxt").textContent = SOCO.loc(s.homeLoc).name;
-    $("#ptsChipTxt").textContent = s.points.toLocaleString();
+    /* Show the SPENDABLE balance once a wallet exists. The quest score is a
+       different, larger number, and a guest reading it in the header would
+       reasonably expect to be able to spend it. Quest rank still shows on
+       the Rewards and Quest screens, where it is labelled. */
+    const w = window.ToastLive && ToastLive.wallet && ToastLive.wallet();
+    $("#ptsChipTxt").textContent = (w ? w.balance : s.points).toLocaleString();
     const n = s.cart.items.reduce((a,i) => a + i.qty, 0);
     const dot = $("#cartDot");
     dot.style.display = n ? "grid" : "none";
