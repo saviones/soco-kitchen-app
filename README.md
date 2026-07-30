@@ -122,7 +122,8 @@ wrangler deploy
 
 - Prices/items transcribed from the posted Castro Valley menu (July 2026) — each location's live Toast menu governs.
 - Quest progress, badges and the cart stay in `localStorage`. Points that buy food do not.
-- **Guests are identified by a phone number on the tenant's allowlist**, with no
-  verification step. That is deliberate for an invited pilot: only enrolled numbers
-  earn or redeem, so the allowlist is the boundary. Setting `allowlist` to `null`
-  removes it and lets anyone enrol themselves — see [LAUNCH.md](LAUNCH.md).
+- **Guests enrol themselves and earn only from that moment on.** Linking a phone
+  in the app is the sign-up; nothing is backdated, so no one has a balance sitting
+  in an account they never opted into. There is no verification step, so the
+  exposure is bounded to what someone earns after joining rather than a back
+  catalogue. A tenant can run a closed pilot via `allowlist` — see [LAUNCH.md](LAUNCH.md).

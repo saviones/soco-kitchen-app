@@ -76,47 +76,53 @@ You want `"ok": true` and `"cv": true`.
 
 ---
 
-## 3. Enrol your pilot guests
+## 3. Enrolment — nothing to do
 
-Edit `backend/tenants.json` → `allowlist`, 10 digits, no punctuation:
+Guests enrol themselves. Someone opens the app, enters the phone number
+they give at the counter, and they are in. **Points run from that moment
+forward.**
+
+Not backdating is the important part. If joining granted past orders, every
+customer who has ever given a phone number at the till would have a balance
+sitting there — hundreds of people who never opted in, each claimable by
+whoever typed that number first. Starting from zero means the only thing at
+stake is what someone earns after choosing to take part.
+
+There is a two-hour grace window (`enrollGraceMinutes`) so the visit a guest
+is *on* still counts — they order, download the app while waiting, and the
+meal in front of them earns. Hours, not days.
+
+**To run a closed pilot instead**, list the numbers allowed to join:
 
 ```json
-"allowlist": ["5105550134", "5105550199", "5109876543"]
+"allowlist": ["5105550134", "5105550199"]
 ```
 
-Then `wrangler deploy` again.
-
-**This is the security boundary for the whole pilot.** There is no SMS
-verification, so a phone number is the only thing identifying a guest. An
-unenrolled number earns nothing and can redeem nothing, which means
-guessing a number gains an attacker nothing unless it is already on this
-list. Keep it short and keep it people you can phone.
-
-`[]` means nobody. That is the safe default and it is what ships.
+`null` (the shipped default) means anyone with the app can join. `[]` means
+nobody can. Either way, a number that has not joined earns nothing and
+redeems nothing.
 
 ---
 
-## 4. Optional: credit past spend
+## 4. Optional: credit a specific guest's past spend
 
-The cron starts from now, so enrolled guests begin at zero. To give them
-credit for history instead:
+Not needed for launch, and deliberately not automatic. If a long-standing
+regular joins and you want to hand them credit for history as a gesture:
 
 ```bash
-python3 backend/backfill.py --tenant soco --days 90 --dry-run
+python3 backend/backfill.py --tenant soco --days 30 --dry-run
 ```
 
-Read what it says. Then, to actually write:
+Read what it prints. To actually write:
 
 ```bash
-python3 backend/backfill.py --tenant soco --days 90 \
+python3 backend/backfill.py --tenant soco --days 30 \
   --url https://restaurant-rewards.<you>.workers.dev \
   --admin-token "<ADMIN_TOKEN_SOCO>"
 ```
 
-Only enrolled numbers are credited, so **enrol first, then backfill.**
-
-Worth a thought: starting everyone at zero is cleaner and avoids "why do I
-have 4,000 points already?" A middle path is 30 days rather than 90.
+It only credits numbers that have already joined, so it can never hand
+points to someone who never opted in.
 
 ---
 

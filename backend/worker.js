@@ -107,14 +107,14 @@ function requireToken(request, header, expected, label) {
   if ((request.headers.get(header) || "") !== expected) throw unauthorized();
 }
 
-/* ---- soft-launch allowlist ----
-   Launch runs without SMS verification, so a phone number is the only
-   thing identifying a guest. The allowlist makes "staff and regulars we
-   know" an enforced boundary: an unenrolled number earns nothing and can
-   redeem nothing, so guessing someone's number gains an attacker nothing
-   unless that number is already enrolled. Set allowlist to null to open
-   the programme to everyone — do that only once OTP is in place. */
-function allowed(tenant, phone) {
+/* ---- who may enrol ----
+   Enrolment itself is self-service: a guest links their phone in the app
+   and starts earning from that moment. This optional config list narrows
+   who is even allowed to do that — useful for a closed pilot, and null
+   (the default) means anyone with the app can join. It is a gate on
+   joining, not a substitute for enrolment: an unenrolled number earns and
+   redeems nothing either way. */
+function canEnroll(tenant, phone) {
   if (!tenant.allowlist) return true;
   return tenant.allowlist.includes(phone);
 }
@@ -240,19 +240,39 @@ function syncStub(tenant, env) {
 }
 
 async function readCursor(tenant, env, loc) {
-  const r = await syncStub(tenant, env).fetch(`https://sync/?loc=${encodeURIComponent(loc)}`);
+  const r = await syncStub(tenant, env).fetch(`https://sync/cursor?loc=${encodeURIComponent(loc)}`);
   return (await r.json()).cursor;
 }
 
 async function writeCursor(tenant, env, loc, cursor) {
-  await syncStub(tenant, env).fetch(`https://sync/?loc=${encodeURIComponent(loc)}`, {
+  await syncStub(tenant, env).fetch(`https://sync/cursor?loc=${encodeURIComponent(loc)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ cursor }),
   });
 }
 
-function checksToOrders(rows, tenant, loc) {
+/* ---- enrolment ----
+   Guests enrol themselves by linking their phone in the app; the map
+   records when. Nothing is backdated — see SyncState in lib/ledger.js
+   for why that matters. */
+async function readEnrolled(tenant, env) {
+  const r = await syncStub(tenant, env).fetch("https://sync/enrolled");
+  return (await r.json()).enrolled || {};
+}
+
+async function enroll(tenant, env, phone) {
+  const r = await syncStub(tenant, env).fetch("https://sync/enroll", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone }),
+  });
+  return r.json();
+}
+
+const isEnrolled = (enrolled, phone) => Object.prototype.hasOwnProperty.call(enrolled, phone);
+
+function checksToOrders(rows, tenant, loc, enrolled) {
   const byPhone = new Map();
   for (const o of rows) {
     if (o.voided || o.deleted) continue;
@@ -262,7 +282,22 @@ function checksToOrders(rows, tenant, loc) {
       if (!c.closedDate && !c.paidDate && !o.closedDate) continue;
       const phone = normalizePhone(c.customer?.phone);
       if (!validPhone(phone)) continue;
-      if (!allowed(tenant, phone)) continue;
+
+      /* Only enrolled guests earn, and only from the moment they enrolled.
+         An order that predates enrolment is skipped rather than backdated,
+         so joining never hands anyone points they did not opt in for.
+
+         The grace window covers the visit someone is actually on: a guest
+         who orders, then downloads the app while waiting for their food,
+         would otherwise get nothing for the meal in front of them — which
+         is precisely when they will test whether this works. Hours, not
+         weeks, so it never reopens the back-catalogue this rule exists to
+         prevent. */
+      const enrolledAt = enrolled[phone];
+      if (enrolledAt == null) continue;
+      const graceMs = (tenant.enrollGraceMinutes ?? 120) * 60000;
+      const opened = Date.parse(o.openedDate);
+      if (Number.isFinite(opened) && opened < enrolledAt - graceMs) continue;
       const items = (c.selections || [])
         .filter(s => !s.voided && s.displayName)
         .map(s => ({ name: s.displayName, price: s.price ?? null }));
@@ -292,6 +327,14 @@ async function syncLocation(tenant, env, loc, guid, wallClock = Date.now()) {
   let windowMs = SYNC_WINDOW_MS;
   const iso = ms => new Date(ms).toISOString().replace("Z", "-0000");
 
+  /* read the enrolment map once per pass, not once per guest */
+  const enrolled = await readEnrolled(tenant, env);
+  ops++;
+  if (!Object.keys(enrolled).length) {
+    await writeCursor(tenant, env, loc, now);   // nobody enrolled; skip ahead
+    return { loc, pages: 0, members: 0, credited: 0, cursor: now, enrolled: 0 };
+  }
+
   while (cursor < now && ops < OPS_BUDGET) {
     const windowEnd = Math.min(cursor + windowMs, now);
     const windowStart = Math.max(0, cursor - SYNC_OVERLAP_MS);
@@ -306,7 +349,7 @@ async function syncLocation(tenant, env, loc, guid, wallClock = Date.now()) {
       if (batch.length < 100) break;
     }
 
-    const byPhone = checksToOrders(rows, tenant, loc);
+    const byPhone = checksToOrders(rows, tenant, loc, enrolled);
 
     /* A window too busy for the remaining budget must shrink, not stall.
        An earlier version refused to advance past a window it could not
@@ -330,7 +373,7 @@ async function syncLocation(tenant, env, loc, guid, wallClock = Date.now()) {
   }
 
   await writeCursor(tenant, env, loc, cursor);
-  return { loc, pages, members, credited, cursor };
+  return { loc, pages, members, credited, cursor, enrolled: Object.keys(enrolled).length };
 }
 
 async function syncTenant(tenant, env) {
@@ -347,14 +390,33 @@ async function syncTenant(tenant, env) {
 
 /* ---------------- guest routes ---------------- */
 
+/* A guest joins by linking their phone in the app. Points run from this
+   moment forward — see SyncState in lib/ledger.js for why nothing is
+   backdated. */
+async function handleEnroll(tenant, env, request) {
+  const body = await request.json().catch(() => ({}));
+  const phone = normalizePhone(body.phone);
+  if (!validPhone(phone)) return json({ error: "phone must be 10 digits" }, request, 400, tenant);
+  if (!tenant.rewardsEnabled) return json({ error: "rewards disabled for this tenant" }, request, 403, tenant);
+  if (!canEnroll(tenant, phone)) {
+    return json({ error: "enrollment_closed",
+      message: "The rewards programme is in a limited pilot right now — ask at the counter." },
+      request, 403, tenant);
+  }
+  const res = await enroll(tenant, env, phone);
+  const state = await callLedger(ledgerStub(tenant, env, phone), "/state");
+  return json({ ...res, ...state }, request, 200, tenant);
+}
+
 async function handleBalance(tenant, env, request, phone) {
-  if (!allowed(tenant, phone)) {
+  const enrolled = await readEnrolled(tenant, env);
+  if (!isEnrolled(enrolled, phone)) {
     return json({ error: "not_enrolled",
-      message: "This number isn't in the rewards programme yet — ask at the counter." },
+      message: "This number hasn't joined the rewards programme yet." },
       request, 403, tenant);
   }
   const state = await callLedger(ledgerStub(tenant, env, phone), "/state");
-  return json(state, request, 200, tenant);
+  return json({ ...state, enrolledAt: enrolled[phone] }, request, 200, tenant);
 }
 
 async function handleRedeem(tenant, env, request) {
@@ -362,9 +424,10 @@ async function handleRedeem(tenant, env, request) {
   const phone = normalizePhone(body.phone);
   if (!validPhone(phone)) return json({ error: "phone must be 10 digits" }, request, 400, tenant);
   if (!tenant.rewardsEnabled) return json({ error: "rewards disabled for this tenant" }, request, 403, tenant);
-  if (!allowed(tenant, phone)) {
+  const enrolled = await readEnrolled(tenant, env);
+  if (!isEnrolled(enrolled, phone)) {
     return json({ error: "not_enrolled",
-      message: "This number isn't in the rewards programme yet — ask at the counter." },
+      message: "This number hasn't joined the rewards programme yet." },
       request, 403, tenant);
   }
 
@@ -422,11 +485,13 @@ async function handleVoucherBurn(tenant, env, request, code) {
 async function handleAdminCredit(tenant, env, request) {
   const body = await request.json().catch(() => ({}));
   const members = body.members || {};
+  const enrolled = await readEnrolled(tenant, env);
   const out = { members: 0, credited: 0, skipped: [] };
   for (const [raw, orders] of Object.entries(members)) {
     const phone = normalizePhone(raw);
     if (!validPhone(phone)) continue;
-    if (!allowed(tenant, phone)) { out.skipped.push(phone); continue; }
+    /* backfill still only touches people who chose to join */
+    if (!isEnrolled(enrolled, phone)) { out.skipped.push(phone); continue; }
     const res = await callLedger(ledgerStub(tenant, env, phone), "/credit", { orders });
     out.members++;
     out.credited += res.credited || 0;
@@ -487,6 +552,8 @@ export default {
         if (!validPhone(phone)) return json({ error: "phone must be 10 digits" }, request, 400, tenant);
         return handleBalance(tenant, env, request, phone);
       }
+
+      if (route[0] === "enroll" && isPost) return handleEnroll(tenant, env, request);
 
       if (route[0] === "redeem" && isPost) return handleRedeem(tenant, env, request);
 

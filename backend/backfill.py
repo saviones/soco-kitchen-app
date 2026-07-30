@@ -7,9 +7,10 @@ at 50 subrequests. This script does that catch-up from your machine,
 where there is no such ceiling, and pushes the result to the deployed
 worker's admin endpoint in batches.
 
-Only enrolled numbers are credited (see "allowlist" in tenants.json), so
-running this before you have enrolled anyone is a no-op — that is the
-intended order: enrol first, then backfill.
+Only guests who have already joined in the app are credited, so running this
+before anyone has joined is a no-op. Joining never backdates points on its
+own — this script is the deliberate exception, for crediting a long-standing
+regular as a gesture.
 
 Usage:
     python3 backend/backfill.py --tenant soco --days 90 \\
@@ -121,8 +122,8 @@ def main():
 
     allowlist = tenant.get("allowlist")
     if allowlist is not None and not allowlist:
-        print("⚠️  allowlist is empty — nobody is enrolled, so nothing will be credited.")
-        print("   Add numbers to tenants.json first, then re-run.\n")
+        print("⚠️  the allowlist is empty — nobody may join, so nothing will be credited.")
+        print("   Set allowlist to null (open) or list numbers in tenants.json.\n")
 
     print(f"Scanning {days} days of {tenant['name']} history…")
     members, stats = scan(tenant, days)

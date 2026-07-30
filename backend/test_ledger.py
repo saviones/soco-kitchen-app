@@ -5,6 +5,7 @@ Toast is stubbed — this tests the money logic, not the proxy.
 Run: python3 backend/test_ledger.py   (~1s, no credentials needed)
 """
 import importlib.util, os, sys, threading, tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 
 APP = Path(__file__).resolve().parent.parent
@@ -13,10 +14,10 @@ srv = importlib.util.module_from_spec(spec)
 sys.modules["devsrv"] = srv
 spec.loader.exec_module(srv)
 
-TENANT = dict(srv.REGISTRY["soco"])          # copy — don't mutate the real registry
+TENANT = dict(srv.REGISTRY["soco"])   # copy — don't mutate the real registry
 PHONE = "5105550134"
 STRANGER = "4155559999"
-TENANT["allowlist"] = [PHONE, "5105550999"]  # STRANGER deliberately absent
+TENANT["allowlist"] = None            # open enrolment, the shipped default
 
 results = []
 def check(name, cond, detail=""):
@@ -26,9 +27,11 @@ def check(name, cond, detail=""):
 def body_of(out):
     return out[0] if isinstance(out, tuple) else out
 
-def fresh_ledger():
+def fresh_ledger(enroll=(PHONE, "5105550999")):
     srv.LEDGER_PATH = Path(tempfile.mkdtemp()) / "ledger.json"
     srv._member_locks.clear()
+    for p in enroll:
+        srv.enroll_member(TENANT, p)
 
 def order(guid, points):
     return {"guid": guid, "ts": "2026-07-20T18:04:00.000+0000", "loc": "cv",
@@ -61,17 +64,71 @@ for t in threads: t.join()
 bal = srv.api_balance(TENANT, PHONE)["balance"]
 check("20 concurrent credits land exactly once each", bal == 2000, f"got {bal}")
 
-print("\n=== the soft-launch allowlist ===")
+print("\n=== enrolment gates everything ===")
 out = body_of(srv.api_balance(TENANT, STRANGER))
-check("an unenrolled number has no balance to read", out.get("error") == "not_enrolled", f"got {out}")
+check("a number that never joined has no balance", out.get("error") == "not_enrolled", f"got {out}")
 out = body_of(srv.api_redeem(TENANT, {"phone": STRANGER, "rewardId": "r-lemonade"}))
-check("an unenrolled number cannot redeem", out.get("error") == "not_enrolled", f"got {out}")
+check("a number that never joined cannot redeem", out.get("error") == "not_enrolled", f"got {out}")
 srv.credit_member(TENANT, STRANGER, [order("s1", 99999)])
 out = body_of(srv.api_redeem(TENANT, {"phone": STRANGER, "rewardId": "r-lemonade"}))
 check("even holding points, an unenrolled number is refused",
       out.get("error") == "not_enrolled", f"got {out}")
 out = body_of(srv.api_admin_credit(TENANT, {"members": {STRANGER: [order("s2", 500)]}}))
-check("backfill skips unenrolled numbers", out.get("skipped") == [STRANGER], f"got {out}")
+check("backfill skips numbers that never joined", out.get("skipped") == [STRANGER], f"got {out}")
+
+out = body_of(srv.api_enroll(TENANT, {"phone": STRANGER}))
+check("joining works and starts at zero-ish",
+      out.get("ok") is True and out.get("alreadyEnrolled") is False, f"got {out}")
+out = body_of(srv.api_enroll(TENANT, {"phone": STRANGER}))
+check("joining twice is idempotent", out.get("alreadyEnrolled") is True, f"got {out}")
+
+print("\n=== joining never backdates points ===")
+# This is the whole point of enrolment-on-install: if joining granted past
+# orders, every customer who ever gave a phone number would have a balance
+# waiting for whoever guessed their number first.
+fresh_ledger(enroll=())
+NEWBIE = "5105551212"
+def check_at(guid, iso_ts, price=20.0):
+    return {"guid": "o-" + guid, "openedDate": iso_ts,
+            "checks": [{"guid": guid, "customer": {"phone": NEWBIE},
+                        "paidDate": iso_ts,
+                        "selections": [{"displayName": "Gumbo", "price": price}]}]}
+
+srv.enroll_member(TENANT, NEWBIE)
+enrolled_at = srv.get_enrolled(TENANT)[NEWBIE]
+before = datetime.fromtimestamp((enrolled_at - 86400000) / 1000, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+after  = datetime.fromtimestamp((enrolled_at + 3600000) / 1000, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+
+grouped = srv.checks_to_members([check_at("old", before)], TENANT, "cv")
+check("an order from before joining is not credited", grouped == {}, f"got {grouped}")
+
+# the visit you're on: ordered 20 minutes ago, joined just now
+just_before = datetime.fromtimestamp((enrolled_at - 20 * 60000) / 1000, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+grouped = srv.checks_to_members([check_at("sameVisit", just_before)], TENANT, "cv")
+check("the meal you just bought before joining still counts",
+      len(grouped.get(NEWBIE, [])) == 1, f"got {grouped}")
+
+# but the grace window is hours, not days
+way_before = datetime.fromtimestamp((enrolled_at - 8 * 3600000) / 1000, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+grouped = srv.checks_to_members([check_at("yesterday", way_before)], TENANT, "cv")
+check("an order well outside the grace window is still refused",
+      grouped == {}, f"got {grouped}")
+
+grouped = srv.checks_to_members([check_at("new", after)], TENANT, "cv")
+check("an order after joining is credited", len(grouped.get(NEWBIE, [])) == 1, f"got {grouped}")
+
+grouped = srv.checks_to_members([check_at("old2", before), check_at("new2", after)], TENANT, "cv")
+check("a mixed window keeps only the post-join order",
+      len(grouped.get(NEWBIE, [])) == 1, f"got {grouped}")
+
+print("\n=== closed pilot mode ===")
+CLOSED = dict(TENANT); CLOSED["allowlist"] = [PHONE]
+out = body_of(srv.api_enroll(CLOSED, {"phone": STRANGER}))
+check("a closed pilot refuses outsiders", out.get("error") == "enrollment_closed", f"got {out}")
+out = body_of(srv.api_enroll(CLOSED, {"phone": PHONE}))
+check("a closed pilot admits listed numbers", out.get("ok") is True, f"got {out}")
+
+fresh_ledger()
 
 print("\n=== the forgery that used to work ===")
 fresh_ledger()
@@ -140,11 +197,15 @@ check("made-up code not found", body_of(srv.api_voucher(TENANT, "SOCO-AAAA-BBBB"
 check("made-up code cannot be burned", body_of(srv.api_burn(TENANT, "SOCO-AAAA-BBBB", {})).get("reason") == "not_found")
 
 print("\n=== only finalised checks are credited ===")
+NOW_ISO = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+
 def raw(guid, price, **check_extra):
+    # dated now, so the no-backdating rule doesn't filter these out — this
+    # section is about finalisation, not enrolment timing
     c = {"guid": guid, "customer": {"phone": PHONE},
          "selections": [{"displayName": "Gumbo", "price": price}]}
     c.update(check_extra)
-    return {"guid": "o-" + guid, "openedDate": "2026-07-20T18:00:00.000+0000", "checks": [c]}
+    return {"guid": "o-" + guid, "openedDate": NOW_ISO, "checks": [c]}
 
 grouped = srv.checks_to_members([raw("open1", 15.0)], TENANT, "cv")
 check("a check still being rung in is skipped", grouped == {}, f"got {grouped}")

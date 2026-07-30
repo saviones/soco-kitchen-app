@@ -37,18 +37,28 @@
       },
 
       "_allowlist": [
-        "SOFT LAUNCH GATE. Launch runs without SMS verification, so a phone",
-        "number is the only thing identifying a guest. Only numbers listed here",
-        "can earn or redeem — an unenrolled number gets nothing, so guessing a",
-        "number gains an attacker nothing unless it is already enrolled.",
+        "Optional gate on who may JOIN. Enrolment itself is self-service: a",
+        "guest links their phone in the app and starts earning from that",
+        "moment. Nothing is backdated, so no one has a balance sitting there",
+        "waiting to be claimed by whoever guesses their number first — the",
+        "only thing at stake is what someone earns after choosing to join.",
         "",
-        "10 digits, no punctuation. [] means nobody (fails closed).",
-        "Set to null to open enrolment to everyone — only once OTP is live."
+        "null (default) = anyone with the app can join.",
+        "A list of 10-digit numbers = closed pilot, only those may join.",
+        "[] = nobody can join at all."
       ],
-      "allowlist": [],
+      "allowlist": null,
 
       "_earn": "pointsPerDollar x item price. See LAUNCH.local.md (gitignored) for the measured average ticket and points per visit.",
       "pointsPerDollar": 10,
+
+      "_enrollGraceMinutes": [
+        "How far before joining an order still counts. Covers the visit a",
+        "guest is actually on — they order, then download the app while",
+        "waiting, and the meal in front of them still earns. Keep it to",
+        "hours; anything longer starts backdating history."
+      ],
+      "enrollGraceMinutes": 120,
 
       "_lookbackDays": "Used only by backend/backfill.py for the one-time history import. The cron sync walks forward from its own cursor.",
       "lookbackDays": 90,

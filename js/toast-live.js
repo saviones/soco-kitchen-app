@@ -157,7 +157,28 @@ const ToastLive = (() => {
      from Toast orders the restaurant actually rang up, so the browser
      cannot inflate it, and the server issues every voucher code. */
   let wallet = null;      // { earned, spent, balance, orders[], vouchers[] }
-  let enrolled = true;    // false = number isn't on the soft-launch allowlist
+  let enrolled = true;    // false = this number hasn't joined yet
+  let enrollClosed = false; // true = tenant is running a closed pilot
+
+  /* Joining IS linking your phone in the app. Points run from this moment
+     forward: nothing is backdated, so nobody has a balance waiting to be
+     claimed by whoever guesses their number first. */
+  async function enrollPhone(rawPhone){
+    const phone = String(rawPhone).replace(/\D/g, "").slice(-10);
+    try {
+      const res = await call("/enroll", { method: "POST", body: { phone }, timeoutMs: 20000 });
+      wallet = res;
+      enrolled = true;
+      enrollClosed = false;
+      return res;
+    } catch(e){
+      if (e.status === 403 && e.data && e.data.error === "enrollment_closed"){
+        enrollClosed = true;
+        enrolled = false;
+      }
+      throw e;
+    }
+  }
 
   async function refreshWallet(){
     const s = Store.state;
@@ -199,7 +220,8 @@ const ToastLive = (() => {
     pricesFrom: () => pricesFrom,
     wallet: () => wallet,
     isEnrolled: () => enrolled,
-    refreshWallet, redeemReward,
+    isEnrollClosed: () => enrollClosed,
+    enrollPhone, refreshWallet, redeemReward,
   };
 })();
 

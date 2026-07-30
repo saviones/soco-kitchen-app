@@ -126,25 +126,30 @@ const ToastSync = (() => {
           ${badge()}
         </div>
         <div class="sub mt10">${live()
-          ? "Link the phone number you use at checkout — your real Toast orders from the last 2 weeks (Castro Valley & Alameda) turn into points automatically."
+          ? "Use the phone number you give at the counter. From here on, every order banks points automatically — just give that number when you order.<br><span class='dim' style='font-size:11px'>Starts fresh from today; past orders don't count.</span>"
           : "Link the phone number you use at checkout and your real orders turn into quest points — automatically, at all 4 locations."}</div>
         <div class="phinput">
           <input id="toastPhone" type="tel" inputmode="tel" placeholder="(510) 555-0134" maxlength="14">
           <button class="btn gold" onclick="ToastSync.link()">Link</button>
         </div>`;
     }
-    /* soft launch: only enrolled numbers exist, so say so plainly
-       instead of showing an empty wallet that looks broken */
+    /* Only reachable when the tenant is running a closed pilot — otherwise
+       linking a number enrols it on the spot. */
     if (live() && ToastLive.isEnrolled && !ToastLive.isEnrolled()){
+      const closed = ToastLive.isEnrollClosed && ToastLive.isEnrollClosed();
       return `
         <div class="row" style="justify-content:space-between">
           <span class="toastlogo"><span class="t">T</span> Toast Loyalty</span>
           ${badge()}
         </div>
         <div class="notice mt10" style="line-height:1.6">
-          <b>${esc(s.toast.phone)} isn't in the rewards programme yet.</b><br>
-          We're running a small pilot at <b>Castro Valley</b> while we get it right.
-          Ask at the counter to be added — then your orders start banking points.
+          ${closed
+            ? `<b>We're in a limited pilot right now.</b><br>
+               Rewards are open to a small group while we get it right.
+               Ask at the counter and we'll add <b>${esc(s.toast.phone)}</b>.`
+            : `<b>${esc(s.toast.phone)} hasn't joined yet.</b><br>
+               Tap below to try again — joining takes a second and points start
+               with your next order.`}
         </div>
         <button class="btn small ghost wide mt10" style="color:var(--ink-faint)" onclick="ToastSync.unlink()">Use a different number</button>`;
     }
@@ -180,11 +185,23 @@ const ToastSync = (() => {
     const card = document.getElementById("toastcard");
     card.innerHTML = `<div class="empty"><span class="e">🔗</span>Contacting Toast…<br><span class="dim small">matching your order history</span></div>`;
     if (live()){
-      s.toast.linked = true;
-      s.toast.phone = `(${val.slice(0,3)}) ${val.slice(3,6)}-${val.slice(6,10)}`;
-      Store.save();
-      App.notify(`Toast linked — checking the last 2 weeks of orders for <b>${esc(s.toast.phone)}</b>`, "🔗", 3600);
-      ToastLive.syncOrders(true).then(() => App.refresh());
+      const pretty = `(${val.slice(0,3)}) ${val.slice(3,6)}-${val.slice(6,10)}`;
+      ToastLive.enrollPhone(val).then(res => {
+        s.toast.linked = true;
+        s.toast.phone = pretty;
+        Store.save();
+        if (res.alreadyEnrolled){
+          App.notify(`Welcome back — <b>${res.balance.toLocaleString()} points</b> ⚜️`, "🔗", 3600);
+        } else {
+          App.notify(`You're in! Points start with your next order at <b>${esc(pretty)}</b> ⚜️`, "🎉", 4600);
+          Game.confetti(120);
+        }
+        App.refresh(); App.updateHeader();
+      }).catch(e => {
+        const d = e.data || {};
+        App.notify(d.message || "Couldn't join right now — try again in a minute", "📡", 4200);
+        App.refresh();
+      });
       return;
     }
     setTimeout(() => {

@@ -77,9 +77,11 @@ guests tap a button, anyone could give themselves a free meal. Reading the
 actual tickets is what makes a reward mean something.
 
 **"How far back do you look?"**
-By default we start from the day you switch it on. If you want regulars to
-get credit for past visits we can import up to 90 days, but that's your
-call.
+Nothing is backdated. A guest starts earning the moment they join in the
+app — their previous visits don't count, and no one has points sitting in
+an account they never signed up for. If you specifically want to credit a
+long-standing regular for past visits, that's a deliberate one-off you ask
+us for.
 
 **"What if I want to stop?"**
 Delete the credential (above). Your guests' balances stay frozen where they

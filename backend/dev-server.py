@@ -279,15 +279,37 @@ def member_state(key):
     return led, m
 
 
-def allowed(tenant, phone):
-    """Soft-launch gate. Launch runs without SMS verification, so a phone
-    number is the only thing identifying a guest. Only enrolled numbers can
-    earn or redeem, which means guessing a number gains an attacker nothing
-    unless it is already enrolled. allowlist=null opens enrolment to all —
-    only do that once OTP is live."""
+def can_enroll(tenant, phone):
+    """Optional gate on who may JOIN. Enrolment itself is self-service — a
+    guest links their phone in the app. null (the default) means anyone with
+    the app can join; a list narrows it to a closed pilot."""
     if tenant.get("allowlist") is None:
         return True
     return phone in (tenant.get("allowlist") or [])
+
+
+def get_enrolled(tenant):
+    return (_load_ledger().get("enrolled") or {}).get(tenant["id"], {})
+
+
+def is_enrolled(tenant, phone):
+    return phone in get_enrolled(tenant)
+
+
+def enroll_member(tenant, phone):
+    """Records WHEN a guest joined. The sync credits only orders from that
+    moment on — nothing is backdated, so joining never hands anyone points
+    they did not opt in for."""
+    with _ledger_lock:
+        led = _load_ledger()
+        led.setdefault("enrolled", {}).setdefault(tenant["id"], {})
+        existing = led["enrolled"][tenant["id"]].get(phone)
+        if existing:
+            return {"ok": True, "alreadyEnrolled": True, "enrolledAt": existing}
+        now = int(time.time() * 1000)
+        led["enrolled"][tenant["id"]][phone] = now
+        _save_ledger(led)
+        return {"ok": True, "alreadyEnrolled": False, "enrolledAt": now}
 
 
 def credit_member(tenant, phone, orders):
@@ -316,10 +338,24 @@ def credit_member(tenant, phone, orders):
         return {"ok": True, "credited": credited, "added": added, "earned": m["earned"]}
 
 
+def api_enroll(tenant, body):
+    phone = re.sub(r"\D", "", body.get("phone") or "")[-10:]
+    if not re.match(r"^\d{10}$", phone):
+        return {"error": "phone must be 10 digits"}, 400
+    if not tenant.get("rewardsEnabled"):
+        return {"error": "rewards disabled for this tenant"}, 403
+    if not can_enroll(tenant, phone):
+        return {"error": "enrollment_closed",
+                "message": "The rewards programme is in a limited pilot right now — ask at the counter."}, 403
+    res = enroll_member(tenant, phone)
+    res.update(api_balance(tenant, phone))
+    return res
+
+
 def api_balance(tenant, phone):
-    if not allowed(tenant, phone):
+    if not is_enrolled(tenant, phone):
         return {"error": "not_enrolled",
-                "message": "This number isn't in the rewards programme yet — ask at the counter."}, 403
+                "message": "This number hasn't joined the rewards programme yet."}, 403
     key = f"{tenant['id']}:{phone}"
     _, m = member_state(key)
     vouchers = sorted(m["vouchers"].values(), key=lambda v: v["issuedAt"], reverse=True)
@@ -335,9 +371,9 @@ def api_redeem(tenant, body):
         return {"error": "phone must be 10 digits"}, 400
     if not tenant.get("rewardsEnabled"):
         return {"error": "rewards disabled for this tenant"}, 403
-    if not allowed(tenant, phone):
+    if not is_enrolled(tenant, phone):
         return {"error": "not_enrolled",
-                "message": "This number isn't in the rewards programme yet — ask at the counter."}, 403
+                "message": "This number hasn't joined the rewards programme yet."}, 403
     reward = next((r for r in tenant["rewards"] if r["id"] == body.get("rewardId")), None)
     if not reward:
         return {"error": "unknown reward"}, 400
@@ -420,8 +456,11 @@ SYNC_OVERLAP_MS = 30 * 60 * 1000
 OPS_BUDGET = 35
 
 
-def checks_to_members(rows, tenant, loc):
-    """Group Toast checks by guest phone, skipping anyone not enrolled."""
+def checks_to_members(rows, tenant, loc, enrolled=None):
+    """Group Toast checks by guest phone, skipping anyone not enrolled and
+    any order predating their enrolment."""
+    if enrolled is None:
+        enrolled = get_enrolled(tenant)
     by_phone = {}
     for o in rows:
         if o.get("voided") or o.get("deleted"):
@@ -433,8 +472,26 @@ def checks_to_members(rows, tenant, loc):
             if not c.get("closedDate") and not c.get("paidDate") and not o.get("closedDate"):
                 continue
             phone = re.sub(r"\D", "", (c.get("customer") or {}).get("phone") or "")[-10:]
-            if len(phone) != 10 or not allowed(tenant, phone):
+            if len(phone) != 10:
                 continue
+            # only enrolled guests earn, and only from the moment they enrolled
+            enrolled_at = enrolled.get(phone)
+            if enrolled_at is None:
+                continue
+            # Grace window covers the visit someone is actually on — a guest who
+            # orders then joins while waiting for their food would otherwise get
+            # nothing for the meal in front of them. Hours, not weeks, so it never
+            # reopens the back-catalogue this rule exists to prevent.
+            grace_ms = tenant.get("enrollGraceMinutes", 120) * 60000
+            opened = o.get("openedDate")
+            if opened:
+                try:
+                    ts = datetime.strptime(opened[:19], "%Y-%m-%dT%H:%M:%S").replace(
+                        tzinfo=timezone.utc).timestamp() * 1000
+                    if ts < enrolled_at - grace_ms:
+                        continue
+                except ValueError:
+                    pass
             items = [{"name": s["displayName"], "price": s.get("price")}
                      for s in c.get("selections") or []
                      if not s.get("voided") and s.get("displayName")]
@@ -463,6 +520,15 @@ def sync_location(tenant, loc, guid, now_ms=None):
     ops = pages = members = credited = 0
     window_ms = SYNC_WINDOW_MS
 
+    # read the enrolment map once per pass, not once per guest
+    enrolled = get_enrolled(tenant)
+    if not enrolled:
+        led = _load_ledger()
+        led.setdefault("cursors", {})[ckey] = now_ms
+        _save_ledger(led)
+        return {"loc": loc, "pages": 0, "members": 0, "credited": 0,
+                "cursor": now_ms, "enrolled": 0}
+
     while cursor < now_ms and ops < OPS_BUDGET:
         win_end = min(cursor + window_ms, now_ms)
         win_start = max(0, cursor - SYNC_OVERLAP_MS)
@@ -479,7 +545,7 @@ def sync_location(tenant, loc, guid, now_ms=None):
                 break
             page += 1
 
-        by_phone = checks_to_members(rows, tenant, loc)
+        by_phone = checks_to_members(rows, tenant, loc, enrolled)
 
         # A window too busy for the remaining budget must shrink, not stall —
         # refusing to advance past an undrainable window loops forever on catch-up.
@@ -497,7 +563,8 @@ def sync_location(tenant, loc, guid, now_ms=None):
     led = _load_ledger()
     led.setdefault("cursors", {})[ckey] = cursor
     _save_ledger(led)
-    return {"loc": loc, "pages": pages, "members": members, "credited": credited, "cursor": cursor}
+    return {"loc": loc, "pages": pages, "members": members, "credited": credited,
+            "cursor": cursor, "enrolled": len(enrolled)}
 
 
 def sync_tenant(tenant):
@@ -516,7 +583,8 @@ def api_admin_credit(tenant, body):
         phone = re.sub(r"\D", "", raw)[-10:]
         if len(phone) != 10:
             continue
-        if not allowed(tenant, phone):
+        # backfill still only touches people who chose to join
+        if not is_enrolled(tenant, phone):
             out["skipped"].append(phone)
             continue
         res = credit_member(tenant, phone, orders)
@@ -570,7 +638,8 @@ class Handler(BaseHTTPRequestHandler):
             return {"ok": True, "tenant": tenant["id"], "name": tenant["name"],
                     "live": {k: bool(v) for k, v in tenant["locations"].items()},
                     "rewardsEnabled": bool(tenant.get("rewardsEnabled")),
-                    "enrollmentOpen": tenant.get("allowlist") is None}
+                    "enrollmentOpen": tenant.get("allowlist") is None,
+                    "enrolledCount": len(get_enrolled(tenant))}
         if head == "locations" and method == "GET":
             return api_locations(tenant)
         if head == "menu" and method == "GET":
@@ -587,6 +656,8 @@ class Handler(BaseHTTPRequestHandler):
             if not re.match(r"^\d{10}$", phone):
                 return {"error": "phone must be 10 digits"}, 400
             return api_balance(tenant, phone)
+        if head == "enroll" and method == "POST":
+            return api_enroll(tenant, body)
         if head == "redeem" and method == "POST":
             return api_redeem(tenant, body)
         if head == "voucher" and len(route) > 1:

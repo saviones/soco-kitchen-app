@@ -76,18 +76,54 @@ export class SyncState {
     this.state = state;
   }
 
+  json(data, status = 200) {
+    return new Response(JSON.stringify(data),
+      { status, headers: { "Content-Type": "application/json" } });
+  }
+
   async fetch(request) {
     const url = new URL(request.url);
-    const key = url.searchParams.get("loc") || "default";
-    if (request.method === "POST") {
-      const { cursor } = await request.json();
-      await this.state.storage.put(`cursor:${key}`, cursor);
-      return new Response(JSON.stringify({ ok: true }),
-        { headers: { "Content-Type": "application/json" } });
+    const body = request.method === "POST" ? await request.json() : {};
+
+    switch (url.pathname) {
+      /* ---- cron cursors ---- */
+      case "/cursor": {
+        const key = url.searchParams.get("loc") || "default";
+        if (request.method === "POST") {
+          await this.state.storage.put(`cursor:${key}`, body.cursor);
+          return this.json({ ok: true });
+        }
+        return this.json({ cursor: (await this.state.storage.get(`cursor:${key}`)) ?? null });
+      }
+
+      /* ---- enrolment ----
+         A guest enrols by linking their phone in the app. We record WHEN,
+         and the sync credits only orders from that moment on.
+
+         Not backdating is the point. If enrolment granted past orders, every
+         customer who ever gave a phone number at the till would have a
+         balance waiting to be claimed by anyone who knew the number — a few
+         hundred people who never opted in. Starting from zero means the only
+         thing at stake is what a guest earns after choosing to take part. */
+      case "/enroll": {
+        const phone = body.phone;
+        if (!phone) return this.json({ error: "phone required" }, 400);
+        const enrolled = (await this.state.storage.get("enrolled")) || {};
+        if (enrolled[phone]) {
+          return this.json({ ok: true, alreadyEnrolled: true, enrolledAt: enrolled[phone] });
+        }
+        enrolled[phone] = Date.now();
+        await this.state.storage.put("enrolled", enrolled);
+        return this.json({ ok: true, alreadyEnrolled: false, enrolledAt: enrolled[phone] });
+      }
+
+      /* the cron reads this once per pass rather than asking per guest */
+      case "/enrolled":
+        return this.json({ enrolled: (await this.state.storage.get("enrolled")) || {} });
+
+      default:
+        return this.json({ error: "not found" }, 404);
     }
-    const cursor = await this.state.storage.get(`cursor:${key}`);
-    return new Response(JSON.stringify({ cursor: cursor ?? null }),
-      { headers: { "Content-Type": "application/json" } });
   }
 }
 
