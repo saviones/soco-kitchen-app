@@ -39,40 +39,64 @@ real workload and cron is included.
 
 You need:
 
-- A **Cloudflare account** (free plan is enough) and `npm i -g wrangler`
-- Toast Standard API credentials — you already have these in `.env`
-- A list of **phone numbers to enrol** (staff, family, regulars who agree)
+- A **Cloudflare account** (free plan is enough) — https://dash.cloudflare.com/sign-up
+- Toast Standard API credentials — already in your local `.env`
 - 20 minutes
+
+You do **not** need Node, npm, or wrangler installed. Cloudflare builds and
+deploys straight from the GitHub repo.
 
 ---
 
-## 2. Deploy the backend
+## 2. Deploy the backend — all in the browser
 
-```bash
-cd backend
-wrangler kv namespace create VOUCHER_INDEX
+### a. Create the KV namespace
+
+Dashboard → **Storage & Databases** → **KV** → *Create a namespace*.
+Name it `VOUCHER_INDEX`. Copy the **namespace ID** it gives you.
+
+Paste that ID into `backend/wrangler.toml`, replacing
+`REPLACE_WITH_YOUR_KV_NAMESPACE_ID`, then commit and push.
+
+### b. Connect the repo
+
+Dashboard → **Workers & Pages** → *Create* → **Workers** → *Import a repository*.
+
+- Repository: `saviones/soco-kitchen-app`
+- **Root directory: `backend`** ← easy to miss, and nothing works without it
+- Build command: leave blank
+- Deploy command: `npx wrangler deploy`
+
+### c. Add the secrets
+
+Worker → **Settings** → **Variables and Secrets** → *Add*, type **Secret**:
+
+| Name | Value |
+|---|---|
+| `TOAST_SOCO_CLIENT_ID` | from your `.env` |
+| `TOAST_SOCO_CLIENT_SECRET` | from your `.env` |
+| `STAFF_TOKEN_SOCO` | a long random string — goes to the counter |
+| `ADMIN_TOKEN_SOCO` | a long random string — stays with you |
+
+For the two tokens, any long random string works. In Terminal:
+`openssl rand -hex 24`
+
+Secrets go here, never in the repo — it is public.
+
+### d. Redeploy and check
+
+Push any commit, or hit *Retry deployment*. Then visit:
+
 ```
-
-Paste the returned id into `wrangler.toml` under `[[kv_namespaces]]`, then:
-
-```bash
-wrangler secret put TOAST_SOCO_CLIENT_ID
-wrangler secret put TOAST_SOCO_CLIENT_SECRET
-wrangler secret put STAFF_TOKEN_SOCO
-wrangler secret put ADMIN_TOKEN_SOCO
-wrangler deploy
-```
-
-Use long random values for the two tokens — e.g. `openssl rand -hex 24`.
-The staff token goes to the counter. The admin token stays with you.
-
-Confirm it's alive (replace with your deployed URL):
-
-```bash
-curl https://restaurant-rewards.<you>.workers.dev/api/v1/soco/health
+https://restaurant-rewards.<your-subdomain>.workers.dev/api/v1/soco/health
 ```
 
 You want `"ok": true` and `"cv": true`.
+
+> **Prefer the command line?** Install Node from https://nodejs.org, then
+> `npm i -g wrangler`, `wrangler login`, and from `backend/`:
+> `wrangler kv namespace create VOUCHER_INDEX`, four `wrangler secret put`
+> commands, and `wrangler deploy`. Same result.
 
 ---
 

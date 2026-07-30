@@ -2,10 +2,11 @@ name = "restaurant-rewards"
 main = "worker.js"
 compatibility_date = "2025-01-01"
 
-# tenants.json is imported by worker.js
-rules = [
-  { type = "Data", globs = ["**/*.json"], fallthrough = true }
-]
+# NOTE: no module rule for *.json on purpose. worker.js does
+#   import registry from "./tenants.json"
+# and the bundler inlines that as a parsed object. Declaring a `Data` rule
+# would hand it over as an ArrayBuffer instead and every tenant lookup
+# would fail at runtime.
 
 [vars]
 TOAST_API_HOST = "https://ws-api.toasttab.com"
@@ -38,7 +39,8 @@ new_sqlite_classes = ["MemberLedger", "SyncState"]
 # Written once per redemption only — a few writes a day, nowhere near
 # the 1,000/day free limit. Eventual consistency is fine here because
 # the authoritative voucher record lives in the Durable Object.
-# Create with:  wrangler kv namespace create VOUCHER_INDEX
+# Create it in the dashboard (Storage & Databases -> KV -> Create) or with
+# `wrangler kv namespace create VOUCHER_INDEX`, then paste the id below.
 [[kv_namespaces]]
 binding = "VOUCHER_INDEX"
 id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
@@ -50,7 +52,11 @@ id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
 [triggers]
 crons = ["*/5 * * * *"]
 
-# --- Secrets (set with `wrangler secret put <NAME>`) ---------------
+# --- Secrets -------------------------------------------------------
+# Set these in the dashboard (Worker -> Settings -> Variables and Secrets,
+# type "Secret") or with `wrangler secret put <NAME>`. Never in this file —
+# it is committed to a public repository.
+#
 #   TOAST_SOCO_CLIENT_ID
 #   TOAST_SOCO_CLIENT_SECRET
 #   STAFF_TOKEN_SOCO          <- give this to counter staff for /staff
