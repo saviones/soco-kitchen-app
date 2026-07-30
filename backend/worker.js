@@ -535,6 +535,13 @@ export default {
       const isPost = request.method === "POST";
 
       if (route[0] === "health" && isGet) {
+        /* Report WHICH secrets are visible to the running worker — names and
+           booleans only, never values. Without this, a missing or misnamed
+           secret is indistinguishable from a broken integration, and the
+           per-tenant naming (TOAST_<TENANT>_CLIENT_ID) makes typos easy. */
+        const configured = Object.fromEntries(
+          Object.entries(tenant.secrets).map(([k, envName]) => [envName, !!env[envName]]));
+        const ready = Object.values(configured).every(Boolean);
         return json({
           ok: true,
           tenant: tenant.id,
@@ -542,6 +549,8 @@ export default {
           live: Object.fromEntries(Object.entries(tenant.locations).map(([k, v]) => [k, !!v])),
           rewardsEnabled: !!tenant.rewardsEnabled,
           enrollmentOpen: !tenant.allowlist,
+          secretsReady: ready,
+          configured,
         }, request, 200, tenant);
       }
 
