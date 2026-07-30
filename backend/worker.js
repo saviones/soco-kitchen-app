@@ -31,7 +31,7 @@
      KV namespace    VOUCHER_INDEX  (voucher code -> owner)
    ============================================================ */
 
-import { getTenant, tenantCredentials, rewardById, staffToken, adminToken } from "./tenants.js";
+import { TENANTS, getTenant, tenantCredentials, rewardById, staffToken, adminToken } from "./tenants.js";
 import { MemberLedger, SyncState, pointsForItems, memberKey } from "./lib/ledger.js";
 
 export { MemberLedger, SyncState };
@@ -511,21 +511,29 @@ export default {
   },
 
   async fetch(request, env) {
-    const url = new URL(request.url);
-    const parts = url.pathname.split("/").filter(Boolean);   // api, v1, :tenant, ...
-    const tenant = parts[0] === "api" && parts[1] === "v1" ? getTenant(parts[2]) : null;
-
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders(request, tenant) });
-    }
-    if (parts[0] !== "api" || parts[1] !== "v1") return json({ error: "not found" }, request, 404);
-    if (!tenant) return json({ error: "unknown tenant" }, request, 404);
-
-    const route = parts.slice(3);
-    const isGet = request.method === "GET";
-    const isPost = request.method === "POST";
-
+    /* Everything, including tenant resolution, runs inside this try. It used
+       to sit outside, so a failure there escaped as a bare 500 with no body —
+       which is exactly the least debuggable outcome for the one line most
+       likely to break on a fresh deploy. */
+    let tenant = null;
     try {
+      const url = new URL(request.url);
+      const parts = url.pathname.split("/").filter(Boolean);   // api, v1, :tenant, ...
+
+      if (parts[0] === "api" && parts[1] === "v1") tenant = getTenant(parts[2]);
+
+      if (request.method === "OPTIONS") {
+        return new Response(null, { status: 204, headers: corsHeaders(request, tenant) });
+      }
+      if (parts[0] !== "api" || parts[1] !== "v1") return json({ error: "not found" }, request, 404);
+      if (!tenant) {
+        return json({ error: "unknown tenant", known: Object.keys(TENANTS) }, request, 404);
+      }
+
+      const route = parts.slice(3);
+      const isGet = request.method === "GET";
+      const isPost = request.method === "POST";
+
       if (route[0] === "health" && isGet) {
         return json({
           ok: true,

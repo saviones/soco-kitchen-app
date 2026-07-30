@@ -6,7 +6,26 @@
    backends. This module only adds lookup helpers.
    ============================================================ */
 
-import registry from "./tenants.json";
+import registryRaw from "./tenants.json";
+
+/* Bundlers disagree about what a JSON import yields — a parsed object, a
+   string, or raw bytes, depending on module rules and build settings. Getting
+   this wrong is not a loud failure: TENANTS ends up undefined and the first
+   tenant lookup throws a bare 500 with no useful message. Normalise all three
+   shapes so the deployed worker cannot depend on which bundler ran. */
+function normalizeRegistry(raw) {
+  if (raw == null) throw new Error("tenants.json did not load");
+  if (typeof raw === "string") return JSON.parse(raw);
+  if (raw instanceof ArrayBuffer) return JSON.parse(new TextDecoder().decode(raw));
+  if (ArrayBuffer.isView(raw)) return JSON.parse(new TextDecoder().decode(raw.buffer));
+  return raw;
+}
+
+const registry = normalizeRegistry(registryRaw);
+
+if (!registry.tenants || typeof registry.tenants !== "object") {
+  throw new Error("tenants.json loaded but has no `tenants` object");
+}
 
 export const TENANTS = registry.tenants;
 
